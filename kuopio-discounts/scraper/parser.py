@@ -2,9 +2,21 @@ import glob
 import json
 import os
 import sqlite3
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from PIL import Image
+
+# Загружаем переменные окружения из файла .env
+load_dotenv()
+
+# Получаем ключ из файла .env
+api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    raise ValueError(
+        "API-ключ не найден! Создай файл .env и добавь строчку: GEMINI_API_KEY=твой_ключ"
+    )
 
 # 1. Инициализация базы данных SQLite
 DB_NAME = "products.db"
@@ -30,10 +42,8 @@ def init_db():
     conn.close()
 
 
-# 2. Инициализация клиента Gemini API
-client = genai.Client(
-    api_key="AQ.Ab8RN6LklbBqghA9VsjjedL0XJxniW-S0PL2eMb8yH4xkYUHPQ"
-)
+# 2. Инициализация клиента Gemini API через переменную окружения
+client = genai.Client(api_key=api_key)
 
 
 def process_page_image(image_path):
@@ -57,7 +67,11 @@ def process_page_image(image_path):
             model="gemini-3.6-flash",
             contents=[img, prompt],
             config=types.GenerateContentConfig(
-                response_mime_type="application/json"
+                response_mime_type="application/json",
+                # Отключаем AFC, чтобы убрать системные предупреждения
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                    disable=True
+                ),
             ),
         )
         return json.loads(response.text)
