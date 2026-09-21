@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import re
 import sqlite3
 import time
 from dotenv import load_dotenv
@@ -47,13 +48,20 @@ def init_db():
 client = genai.Client(api_key=api_key)
 
 
-def process_page_image(image_path, max_retries=3):
+def process_page_image(image_path, max_retries=5):
     print(f"Обработка: {image_path}...")
     img = Image.open(image_path)
 
     prompt = """
-    Проанализируй страницу каталога скидок и извлеки все товары.
-    Для каждого товара верни JSON-массив объектов со следующими полями:
+    Проанализируй страницу каталога скидок.
+
+    КРИТИЧЕСКОЕ УСЛОВИЕ ФИЛЬТРАЦИИ:
+    Если на этой странице НЕ содержатся пищевые продукты (еда, напитки, свежие овощи/фрукты, бакалея, мясо, молочные продукты, полуфабрикаты, сладости),
+    а изображены только непродовольственные товары (одежда, инструменты, электроника, посуда, бытовая химия, товары для сада, текстиль) — 
+    верни ПУСТОЙ массив: []
+
+    ЕСЛИ НА СТРАНИЦЕ ЕСТЬ ПИЩЕВЫЕ ПРОДУКТЫ:
+    Извлеки ТОЛЬКО пищевые товары (игнорируя бытовую химию или одежду, если они находятся на той же странице) и верни JSON-массив объектов со следующими полями:
     - product_name: название товара на финском
     - price: текущая цена со скидкой (число, например 1.39)
     - unit: единица измерения/вес (например "500 g", "1 kg", "4 kpl")
@@ -63,7 +71,8 @@ def process_page_image(image_path, max_retries=3):
     Отвечай СТРОГО в формате валидного JSON без какого-либо дополнительного текста или разметки markdown.
     """
 
-    for attempt in range(1, max_retries + 1):
+    attempt = 1
+    while attempt <= max_retries:
         try:
             response = client.models.generate_content(
                 model="gemini-3.6-flash",
@@ -76,13 +85,37 @@ def process_page_image(image_path, max_retries=3):
                 ),
             )
             return json.loads(response.text)
+
         except Exception as e:
-            if "503" in str(e) and attempt < max_retries:
-                print(f" Сервер перегружен (503). Повтор {attempt}/{max_retries} через 3 секунды...")
-                time.sleep(3)
+            err_str = str(e)
+
+            # Обработка превышения лимитов (429)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                match = re.search(r"retry in (\d+(\.\d+)?)s", err_str)
+                wait_time = int(float(match.group(1))) + 2 if match else 60
+
+                print(
+                    f" Лимит запросов (429). Ждем {wait_time} секунд перед повтором (попытка {attempt}/{max_retries})..."
+                )
+                time.sleep(wait_time)
+                attempt += 1
+
+            # Обработка перегрузки сервера (503)
+            elif "503" in err_str or "UNAVAILABLE" in err_str:
+                print(
+                    f" Сервер перегружен (503). Ждем 5 секунд (попытка {attempt}/{max_retries})..."
+                )
+                time.sleep(5)
+                attempt += 1
+
             else:
-                print(f" Ошибка при обработке {image_path}: {e}")
+                print(f" Критическая ошибка при обработке {image_path}: {e}")
                 return []
+
+    print(
+        f" Не удалось обработать {image_path} после {max_retries} попыток из-за лимитов."
+    )
+    return []
 
 
 def save_to_db(catalog_name, products):
@@ -125,19 +158,23 @@ def main():
         print(f"\n=== Обработка {folder} ===")
         images = sorted(
             glob.glob(os.path.join(folder, "*.png")),
-            key=lambda x: int(os.path.basename(x).split("_")[-1].replace(".png", "")),
+            key=lambda x: int(
+                os.path.basename(x).split("_")[-1].replace(".png", "")
+            ),
         )
 
         for img_path in images:
             extracted_items = process_page_image(img_path)
             if extracted_items:
-                print(f"  Найдено товаров: {len(extracted_items)}")
+                print(f"  Найдено пищевых товаров: {len(extracted_items)}")
                 save_to_db(folder, extracted_items)
-            
-            # Небольшая пауза между страницами, чтобы не превышать лимиты API
-            time.sleep(1)
+            else:
+                print("  Пропущено (нет пищевых товаров).")
 
-    print(f"\nВсе данные успешно распознаны и сохранены в {DB_NAME}!")
+            # Пауза 13 секунд между запросами
+            time.sleep(13)
+
+    print(f"\nВсе доступные данные успешно обработаны и сохранены в {DB_NAME}!")
 
 
 if __name__ == "__main__":
