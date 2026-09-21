@@ -1,22 +1,30 @@
-# 1. Check and create venv if it doesn't exist
-if (-not (Test-Path "venv")) {
-    Write-Host "Creating virtual environment (venv)..." -ForegroundColor Green
-    py -m venv venv
-} else {
-    Write-Host "Virtual environment (venv) already exists." -ForegroundColor Yellow
+Write-Host "=== Setup Node.js & PyTorch CUDA OCR ===" -ForegroundColor Green
+
+# 1. npm
+npm install
+
+# 2. OCR folder
+$ocrDir = "ocr"
+if (-not (Test-Path $ocrDir)) {
+    New-Item -ItemType Directory -Path $ocrDir | Out-Null
 }
 
-# 2. Activate venv in the current session
-Write-Host "Activating venv..." -ForegroundColor Green
-.\venv\Scripts\Activate.ps1
+Set-Location $ocrDir
 
-# 3. Upgrade pip and install ALL required packages
-Write-Host "Installing all project dependencies..." -ForegroundColor Green
-python -m pip install --upgrade pip
-pip install playwright google-genai python-dotenv pillow
+# 3. venv
+if (-not (Test-Path "venv")) {
+    python -m venv venv
+}
 
-# 4. Install Chromium browser for Playwright
-Write-Host "Installing Chromium browser for Playwright..." -ForegroundColor Green
-playwright install chromium
+# 4. Install CUDA packages
+$venvActivate = ".\venv\Scripts\Activate.ps1"
+if (Test-Path $venvActivate) {
+    & $venvActivate
+    python -m pip install --upgrade pip
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    pip install fastapi uvicorn easyocr pillow
+}
 
-Write-Host "`n Setup complete! Environment and dependencies are ready to use." -ForegroundColor Cyan
+Set-Location ..
+
+Write-Host "=== Setup Finished ===" -ForegroundColor Green
