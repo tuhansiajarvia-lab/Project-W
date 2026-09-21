@@ -29,7 +29,7 @@ function upgradeDbSchema() {
   }
 }
 
-async function processBatchWithGemini(productsBatch) {
+async function processBatchWithGemini(productsBatch, maxRetries = 5) {
   const prompt = `
   Проанализируй список финских продуктов питания.
   Для каждого товара выполни две задачи:
@@ -63,21 +63,38 @@ async function processBatchWithGemini(productsBatch) {
   Отвечай СТРОГО в формате валидного JSON.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
 
-    const cleanJsonStr = response.text.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleanJsonStr);
-  } catch (e) {
-    console.error('Ошибка при переводе и категоризации:', e.message);
-    return [];
+      const cleanJsonStr = response.text.replace(/```json|```/g, '').trim();
+      return JSON.parse(cleanJsonStr);
+
+    } catch (err) {
+      const errStr = err.toString();
+
+      if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED')) {
+        const match = errStr.match(/retry in (\d+(\.\d+)?)s/);
+        const waitSec = match ? Math.ceil(parseFloat(match[1])) + 2 : 60;
+        console.log(` Лимит запросов (429). Ждём ${waitSec} с... (Попытка ${attempt}/${maxRetries})`);
+        await sleep(waitSec * 1000);
+      } else if (errStr.includes('503') || errStr.includes('UNAVAILABLE')) {
+        console.log(` Сервер перегружен (503). Ждём 5 с... (Попытка ${attempt}/${maxRetries})`);
+        await sleep(5000);
+      } else {
+        console.error(` Ошибка при обработке батча:`, err.message);
+        return [];
+      }
+    }
   }
+
+  return [];
 }
 
 async function processEnrichment() {
@@ -111,23 +128,27 @@ async function processEnrichment() {
     console.log(`Обработка товаров ${i + 1} - ${Math.min(i + batchSize, rows.length)}...`);
     const results = await processBatchWithGemini(batch);
 
-    const updateMany = db.transaction((items) => {
-      for (const item of items) {
-        if (!item.id) continue;
-        updateStmt.run(
-          item.name_fi || null,
-          item.name_en || null,
-          item.name_ru || null,
-          item.category_fi || null,
-          item.category_en || null,
-          item.category_ru || null,
-          item.id
-        );
-      }
-    });
+    if (results && results.length > 0) {
+      const updateMany = db.transaction((items) => {
+        for (const item of items) {
+          if (!item.id) continue;
+          updateStmt.run(
+            item.name_fi || null,
+            item.name_en || null,
+            item.name_ru || null,
+            item.category_fi || null,
+            item.category_en || null,
+            item.category_ru || null,
+            item.id
+          );
+        }
+      });
 
-    updateMany(results);
-    await sleep(2000);
+      updateMany(results);
+    }
+
+    // Пауза 20 секунд между запросами для соблюдения лимитов
+    await sleep(20000);
   }
 
   console.log(' Перевод и категоризация успешно завершены!');
