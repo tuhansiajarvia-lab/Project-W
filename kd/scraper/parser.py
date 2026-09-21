@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import sqlite3
+import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -42,11 +43,11 @@ def init_db():
     conn.close()
 
 
-# 2. Инициализация клиента Gemini API через переменную окружения
+# 2. Инициализация клиента Gemini API
 client = genai.Client(api_key=api_key)
 
 
-def process_page_image(image_path):
+def process_page_image(image_path, max_retries=3):
     print(f"Обработка: {image_path}...")
     img = Image.open(image_path)
 
@@ -62,22 +63,26 @@ def process_page_image(image_path):
     Отвечай СТРОГО в формате валидного JSON без какого-либо дополнительного текста или разметки markdown.
     """
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=[img, prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                # Отключаем AFC, чтобы убрать системные предупреждения
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    disable=True
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=[img, prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    ),
                 ),
-            ),
-        )
-        return json.loads(response.text)
-    except Exception as e:
-        print(f"Ошибка при обработке {image_path}: {e}")
-        return []
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries:
+                print(f" Сервер перегружен (503). Повтор {attempt}/{max_retries} через 3 секунды...")
+                time.sleep(3)
+            else:
+                print(f" Ошибка при обработке {image_path}: {e}")
+                return []
 
 
 def save_to_db(catalog_name, products):
@@ -110,22 +115,17 @@ def save_to_db(catalog_name, products):
 def main():
     init_db()
 
-    # Поиск всех созданных каталогов (catalog_1, catalog_2 и т.д.)
     catalog_folders = sorted(glob.glob("catalog_*"))
 
     if not catalog_folders:
-        print(
-            "Каталоги не найдены! Сначала запусти скрипт скачивания downloader.py."
-        )
+        print("Каталоги не найдены! Сначала запусти скрипт скачивания downloader.py.")
         return
 
     for folder in catalog_folders:
         print(f"\n=== Обработка {folder} ===")
         images = sorted(
             glob.glob(os.path.join(folder, "*.png")),
-            key=lambda x: int(
-                os.path.basename(x).split("_")[-1].replace(".png", "")
-            ),
+            key=lambda x: int(os.path.basename(x).split("_")[-1].replace(".png", "")),
         )
 
         for img_path in images:
@@ -133,6 +133,9 @@ def main():
             if extracted_items:
                 print(f"  Найдено товаров: {len(extracted_items)}")
                 save_to_db(folder, extracted_items)
+            
+            # Небольшая пауза между страницами, чтобы не превышать лимиты API
+            time.sleep(1)
 
     print(f"\nВсе данные успешно распознаны и сохранены в {DB_NAME}!")
 
