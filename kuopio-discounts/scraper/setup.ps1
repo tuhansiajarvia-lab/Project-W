@@ -1,24 +1,22 @@
-Write-Host "=== Initializing the Project-W environment ===" -ForegroundColor Green
-
-# 1. Создаем venv, если его нет
+# 1. Check and create venv if it doesn't exist
 if (-not (Test-Path "venv")) {
-    Write-Host "Creating a virtual environment (venv)..." -ForegroundColor Yellow
+    Write-Host "Creating virtual environment (venv)..." -ForegroundColor Green
     py -m venv venv
 } else {
-    Write-Host "The venv virtual environment already exists." -ForegroundColor Cyan
+    Write-Host "Virtual environment (venv) already exists." -ForegroundColor Yellow
 }
 
-# 2. Активируем venv
-Write-Host "Activation venv..." -ForegroundColor Yellow
+# 2. Activate venv in the current session
+Write-Host "Activating venv..." -ForegroundColor Green
 .\venv\Scripts\Activate.ps1
 
-# 3. Обновляем pip и устанавливаем зависимости
-Write-Host "Installing Playwright..." -ForegroundColor Yellow
-pip install --upgrade pip
-pip install playwright
+# 3. Upgrade pip and install ALL required packages
+Write-Host "Installing all project dependencies..." -ForegroundColor Green
+python -m pip install --upgrade pip
+pip install playwright google-genai python-dotenv pillow
 
-# 4. Загружаем браузер Chromium
-Write-Host "Loading browser Chromium..." -ForegroundColor Yellow
+# 4. Install Chromium browser for Playwright
+Write-Host "Installing Chromium browser for Playwright..." -ForegroundColor Green
 playwright install chromium
 
-Write-Host "=== Setup completed successfully! ===" -ForegroundColor Green
+Write-Host "`n Setup complete! Environment and dependencies are ready to use." -ForegroundColor Cyan
