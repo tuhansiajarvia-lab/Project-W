@@ -12,7 +12,6 @@ __pycache__/
 
 # Скачанные каталоги
 catalog_*/
-*.html
 
 # Настройки VS Code
 .vscode/
