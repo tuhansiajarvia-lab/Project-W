@@ -4,18 +4,20 @@ import Database from 'better-sqlite3';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const db = new Database('products.db');
 
-app.use(express.static(path.join(process.cwd(), 'public')));
+// Указываем путь к БД в папке db/
+const dbPath = path.join(process.cwd(), 'db', 'products.db');
+const db = new Database(dbPath);
+
+// Раздаём статику из папки front/
+app.use(express.static(path.join(process.cwd(), 'front')));
 app.use(express.json());
 
-// 1. Эндпоинт для списка категорий
 app.get('/api/categories', (req, res) => {
   const { lang = 'fi' } = req.query;
   const catCol = `category_${lang}`;
 
   try {
-    // Получаем уникальные категории для выбранного языка
     const query = `
       SELECT DISTINCT COALESCE(${catCol}, category_fi, 'Yleinen') AS category
       FROM products
@@ -30,7 +32,6 @@ app.get('/api/categories', (req, res) => {
   }
 });
 
-// 2. Эндпоинт для получения товаров
 app.get('/api/products', (req, res) => {
   const { lang = 'fi', search = '', category = '' } = req.query;
 
@@ -52,14 +53,12 @@ app.get('/api/products', (req, res) => {
     `;
     const params = [];
 
-    // Поиск по всем языковым полям или сырому OCR-тексту
     if (search) {
       query += ` AND (name_fi LIKE ? OR name_en LIKE ? OR name_ru LIKE ? OR raw_ocr_text LIKE ?)`;
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam, searchParam);
     }
 
-    // Фильтр по категории
     if (category && category !== 'all') {
       query += ` AND (${catCol} = ? OR category_fi = ?)`;
       params.push(category, category);
@@ -68,14 +67,12 @@ app.get('/api/products', (req, res) => {
     const stmt = db.prepare(query);
     const rawProducts = stmt.all(...params);
 
-    // Приведение цен к числовому формату для правильного работы .toFixed() на клиенте
     const data = rawProducts.map(p => ({
       ...p,
       price: p.price ? Number(p.price) : null,
       original_price: p.original_price ? Number(p.original_price) : null
     }));
 
-    // Возвращаем в формате data: [...], как ждет app.js
     res.json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

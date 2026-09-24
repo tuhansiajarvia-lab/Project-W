@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
+import path from 'path';
 
-const db = new Database('products.db');
+const dbPath = path.join(process.cwd(), 'db', 'products.db');
+const db = new Database(dbPath);
 
-// Удаляем старую таблицу, чтобы пересоздать её со всеми новыми колонками
 db.exec(`DROP TABLE IF EXISTS products;`);
 
 db.exec(`
@@ -26,4 +27,4 @@ stmt.run('Luomu Banaani', 'Organic Banana', 'Органический банан
 stmt.run('Täysmaito 1l', 'Whole Milk 1l', 'Цельное молоко 1л', 'Maitotuotteet', 'Dairy', 'Молочные продукты', 0.95, 'kpl', null, null, 'Maito 0.95');
 stmt.run('Kauraleipä', 'Oat Bread', 'Овсяный хлеб', 'Leipomo', 'Bakery', 'Выпечка', 1.89, 'pkg', '-10%', 2.10, 'Leipä 1.89');
 
-console.log('База данных успешно пересоздана и заполнена!');
+console.log('База данных успешно пересоздана в папке db/ и заполнена!');
