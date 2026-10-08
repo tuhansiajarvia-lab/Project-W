@@ -16,7 +16,7 @@ def init_ocr():
         print("[OCR] CUDA GPU не найдена. Запуск на CPU (используется системная RAM).")
 
     # Инициализируем EasyOCR для финского и английского языков
-    reader = easyocr.Reader(['fi', 'en'], gpu=use_gpu)
+    reader = easyocr.Reader(['en'], gpu=use_gpu)
     return reader
 
 print("⏳ Инициализация модели EasyOCR...")

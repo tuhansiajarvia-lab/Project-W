@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 async function downloadCatalogs() {
-  const browser = await chromium.launch({ headless: false }); // headless: false чтобы ты видел ход работы в браузере
+  const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -11,7 +11,7 @@ async function downloadCatalogs() {
   const page = await context.newPage();
 
   console.log('Открываем страницу лидл каталогов...');
-await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloaded' });
+  await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloaded' });
 
   // 1. Закрываем куки
   try {
@@ -24,7 +24,6 @@ await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloa
 
   // 2. Закрываем окно выбора магазина (Valitse Lidl-myymälä)
   try {
-    // Ищем кнопку с крестиком или кликаем по клавише Escape
     const closeBtn = await page.waitForSelector('button[aria-label*="Sulje"], button.flyout__close, .dialog__close', { timeout: 3000 });
     if (closeBtn) {
       await closeBtn.click();
@@ -33,7 +32,6 @@ await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloa
       await page.keyboard.press('Escape');
     }
   } catch (e) {
-    // Пробуем нажать Escape на случай если селектор изменился
     await page.keyboard.press('Escape');
   }
 
@@ -56,7 +54,6 @@ await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloa
 
   console.log(`Найдено ссылок на каталоги: ${catalogLinks.length}`);
 
-  // Если ссылки кликабельные через карточки, кликаем по первой карточке
   if (catalogLinks.length === 0) {
     console.log('Пробуем кликнуть по первой карточке каталога напрямую...');
     const cards = await page.$$(catalogSelector);
@@ -70,7 +67,9 @@ await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloa
 
   for (let i = 0; i < catalogLinks.length; i++) {
     const link = catalogLinks[i];
-    const folderName = path.join(process.cwd(), 'back', `catalog_${i + 1}`);
+    
+    // Формируем путь: kd/scraper/catalogs/lidl/catalog_1, catalog_2 ...
+    const folderName = path.join(process.cwd(), 'catalogs', 'lidl', `catalog_${i + 1}`);
 
     if (!fs.existsSync(folderName)) {
       fs.mkdirSync(folderName, { recursive: true });
