@@ -1,103 +1,87 @@
-import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
 
-const db = new Database('products.db');
-
-// Добавляем нужные колонки в БД, если их еще нет
-function upgradeDbSchema() {
-  const columns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
-  const newColumns = [
-    'name_fi', 'name_en', 'name_ru',
-    'category_fi', 'category_en', 'category_ru',
-    'price', 'unit'
-  ];
-
-  for (const col of newColumns) {
-    if (!columns.includes(col)) {
-      db.prepare(`ALTER TABLE products ADD COLUMN ${col} TEXT`).run();
-    }
-  }
-}
-
-upgradeDbSchema();
+// URL нашего запущенного Python OCR микросервиса
+const OCR_SERVICE_URL = 'http://127.0.0.1:5000/process-image';
 
 /**
- * Локальный парсер текста OCR без использования внешних API
+ * Функция для отправки одного изображения в Python OCR
  */
-function parseOcrTextLocally(rawText) {
-  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  const products = [];
+async function processImageWithOCR(imagePath) {
+  try {
+    const response = await fetch(OCR_SERVICE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ image_path: imagePath }),
+    });
 
-  // Находим цены (например: 1,99 или 2.49 €)
-  const priceRegex = /(\d+[\.,]\d{2})\s*€?/;
-
-  let currentProduct = null;
-
-  for (const line of lines) {
-    const match = line.match(priceRegex);
-
-    if (match) {
-      // Найдена цена — заносим продукт
-      const priceVal = match[1].replace(',', '.');
-      if (currentProduct) {
-        currentProduct.price = priceVal;
-        products.push(currentProduct);
-        currentProduct = null;
-      }
-    } else {
-      // Накапливаем название
-      if (!currentProduct) {
-        currentProduct = {
-          name_fi: line,
-          name_en: line, // Локальная заглушка или словарь
-          name_ru: line,
-          category_fi: 'Yleinen',
-          category_en: 'General',
-          category_ru: 'Общее',
-          price: '0.00',
-          unit: 'kpl'
-        };
-      } else {
-        currentProduct.name_fi += ' ' + line;
-      }
+    if (!response.ok) {
+      throw new Error(`Ошибка OCR сервера: status ${response.status}`);
     }
-  }
 
-  return products;
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Ошибка при обработке файла ${imagePath}:`, error.message);
+    return null;
+  }
 }
 
-function processUnprocessedProducts() {
-  const rows = db.prepare('SELECT id, raw_ocr_text FROM products WHERE processed = 0 OR processed IS NULL').all();
+/**
+ * Основная функция обогащения всех каталогов Lidl
+ */
+async function processAllCatalogs() {
+  const lidlCatalogsDir = path.join(process.cwd(), 'catalogs', 'lidl');
 
-  if (rows.length === 0) {
-    console.log('Нет необработанных записей.');
+  if (!fs.existsSync(lidlCatalogsDir)) {
+    console.log('Папка с каталогами не найдена:', lidlCatalogsDir);
     return;
   }
 
-  console.log(`Обработка ${rows.length} записей локально...`);
+  // Получаем список всех папок catalog_*
+  const catalogFolders = fs.readdirSync(lidlCatalogsDir).filter(folder => folder.startsWith('catalog_'));
 
-  const updateStmt = db.prepare(`
-    UPDATE products 
-    SET name_fi = ?, name_en = ?, name_ru = ?, 
-        category_fi = ?, category_en = ?, category_ru = ?, 
-        price = ?, unit = ?, processed = 1 
-    WHERE id = ?
-  `);
+  console.log(`Найдено каталогов для обработки: ${catalogFolders.length}`);
 
-  for (const row of rows) {
-    if (!row.raw_ocr_text) continue;
+  for (const catalogFolder of catalogFolders) {
+    const catalogPath = path.join(lidlCatalogsDir, catalogFolder);
+    console.log(`\n--- Обработка каталога: ${catalogFolder} ---`);
 
-    const parsedItems = parseOcrTextLocally(row.raw_ocr_text);
+    // Читаем все .png файлы из каталога и сортируем их по номеру страницы
+    const imageFiles = fs.readdirSync(catalogPath)
+      .filter(file => file.endsWith('.png'))
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+        const numB = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+        return numA - numB;
+      });
 
-    for (const item of parsedItems) {
-      updateStmt.run(
-        item.name_fi, item.name_en, item.name_ru,
-        item.category_fi, item.category_en, item.category_ru,
-        item.price, item.unit, row.id
-      );
+    const catalogResults = [];
+
+    for (const imageFile of imageFiles) {
+      const absoluteImagePath = path.join(catalogPath, imageFile);
+      console.log(`[OCR] Отправляем страницу: ${imageFile}...`);
+
+      const ocrResult = await processImageWithOCR(absoluteImagePath);
+
+      if (ocrResult && ocrResult.success) {
+        console.log(`  └─ Найдено текстовых блоков: ${ocrResult.text_blocks.length}`);
+        catalogResults.push({
+          page: imageFile,
+          text_blocks: ocrResult.text_blocks,
+        });
+      }
     }
 
-    console.log(`✓ Запись ID ${row.id} успешно структурирована локально!`);
+    // Сохраняем итоговый результат распознавания в JSON рядом с картинками
+    const resultJsonPath = path.join(catalogPath, 'ocr_results.json');
+    fs.writeFileSync(resultJsonPath, JSON.stringify(catalogResults, null, 2), 'utf-8');
+    console.log(`Результаты сохранены в: ${resultJsonPath}`);
   }
+
+  console.log('\nОбработка всех каталогов завершена!');
 }
 
-processUnprocessedProducts();
+processAllCatalogs().catch(console.error);
