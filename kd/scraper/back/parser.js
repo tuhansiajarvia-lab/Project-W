@@ -1,72 +1,126 @@
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
-import FormData from 'form-data';
 import Database from 'better-sqlite3';
 
-const db = new Database('products.db');
+// 1. Инициализируем базу данных в папке db/
+const dbDir = path.join(process.cwd(), 'db');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
-// Инициализируем или проверяем таблицу
+const db = new Database(path.join(dbDir, 'products.db'));
+
+// 2. Создаем таблицу товаров
 db.exec(`
   CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    catalog_name TEXT,
+    store TEXT,
+    catalog_folder TEXT,
+    page TEXT,
     product_name TEXT,
     price REAL,
-    unit TEXT,
+    original_price REAL,
     discount_percent TEXT,
-    original_price REAL
+    raw_text TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
 
-// Функция отправки картинки в локальный Python OCR
-async function runLocalOcr(imagePath) {
-  const formData = new FormData();
-  formData.append('file', fs.createReadStream(imagePath));
-
-  try {
-    const response = await axios.post('http://127.0.0.1:8000/ocr', formData, {
-      headers: formData.getHeaders(),
-    });
-    return response.data.text || '';
-  } catch (err) {
-    console.error(`Ошибка OCR для файла ${path.basename(imagePath)}:`, err.message);
-    return '';
+// Вспомогательная функция очистки и парсинга цены
+function parsePrice(str) {
+  if (!str) return null;
+  let cleaned = str.replace(',', '.').replace(/[^0-9.]/g, '');
+  
+  // Если OCR распознал "150" вместо "1.50"
+  if (/^\d{3,4}$/.test(cleaned)) {
+    cleaned = (parseFloat(cleaned) / 100).toFixed(2);
   }
+  
+  const val = parseFloat(cleaned);
+  return isNaN(val) ? null : val;
 }
 
-async function parseCatalogPages() {
-  const catalogDir = path.join(process.cwd(), 'catalog_pages');
-  if (!fs.existsSync(catalogDir)) {
-    console.log('Папка catalog_pages не найдена!');
-    return;
-  }
+// Извлечение товаров из массива текстовых блоков страницы
+function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
+  const products = [];
+  const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
+  const priceRegex = /(\d+[.,]\d{2}|\b\d{3,4}\b)/;
 
-  const files = fs.readdirSync(catalogDir)
-    .filter(f => f.endsWith('.png'))
-    .sort();
+  for (let i = 0; i < textBlocks.length; i++) {
+    const block = textBlocks[i];
 
-  console.log(`Найдено ${files.length} страниц для обработки...`);
+    if (discountRegex.test(block)) {
+      const discount = block.match(discountRegex)[0];
+      const contextSlice = textBlocks.slice(Math.max(0, i - 2), Math.min(textBlocks.length, i + 5));
 
-  const insertStmt = db.prepare(`
-    INSERT INTO products (catalog_name, product_name, price, unit, discount_percent, original_price)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+      let title = '';
+      let price = null;
+      let originalPrice = null;
 
-  for (const file of files) {
-    const filePath = path.join(catalogDir, file);
-    console.log(`Сканирование через local OCR: ${file}...`);
+      for (const item of contextSlice) {
+        if (priceRegex.test(item)) {
+          const parsed = parsePrice(item);
+          if (parsed && !price) {
+            price = parsed;
+          } else if (parsed && price && !originalPrice && parsed !== price) {
+            originalPrice = parsed;
+          }
+        } else if (item.length > 3 && !discountRegex.test(item) && !title) {
+          title = item;
+        }
+      }
 
-    const extractedText = await runLocalOcr(filePath);
-
-    if (extractedText) {
-      // Сохраняем извлеченный финский текст в поле product_name для перевода и структурирования в enricher.js
-      insertStmt.run(file, extractedText, 0, '', '', 0);
-      console.log(`✓ Записан текст со страницы ${file}`);
+      if (title || price) {
+        products.push({
+          store: 'lidl',
+          catalog_folder: catalogFolder,
+          page: pageName,
+          product_name: title || 'Неизвестный товар',
+          price: price || 0,
+          original_price: originalPrice || 0,
+          discount_percent: discount,
+          raw_text: contextSlice.join(' | ')
+        });
+      }
     }
   }
 
-  console.log('Все страницы успешно сканированы!');
+  return products;
 }
 
-parseCatalogPages();
+// 3. Основной процесс чтения ocr_results.json и сохранения в SQLite
+function parseAllResults() {
+  const lidlDir = path.join(process.cwd(), 'catalogs', 'lidl');
+
+  if (!fs.existsSync(lidlDir)) {
+    console.log('Папка с каталогами catalogs/lidl не найдена!');
+    return;
+  }
+
+  const catalogFolders = fs.readdirSync(lidlDir).filter(f => f.startsWith('catalog_'));
+  const insertStmt = db.prepare(`
+    INSERT INTO products (store, catalog_folder, page, product_name, price, original_price, discount_percent, raw_text)
+    VALUES (@store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @raw_text)
+  `);
+
+  let totalInserted = 0;
+
+  for (const folder of catalogFolders) {
+    const jsonPath = path.join(lidlDir, folder, 'ocr_results.json');
+    if (!fs.existsSync(jsonPath)) continue;
+
+    const pageResults = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+
+    for (const pageData of pageResults) {
+      const products = extractProductsFromPage(pageData.text_blocks, pageData.page, folder);
+      for (const prod of products) {
+        insertStmt.run(prod);
+        totalInserted++;
+      }
+    }
+  }
+
+  console.log(`\nПарсинг завершен! Записано товаров в БД: ${totalInserted}`);
+}
+
+parseAllResults();
