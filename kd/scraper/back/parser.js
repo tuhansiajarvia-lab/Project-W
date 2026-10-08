@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
 
-// 1. Инициализируем базу данных в папке db/
 const dbDir = path.join(process.cwd(), 'db');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
@@ -10,9 +9,11 @@ if (!fs.existsSync(dbDir)) {
 
 const db = new Database(path.join(dbDir, 'products.db'));
 
-// 2. Создаем таблицу товаров
+// Пересоздаём таблицу
 db.exec(`
-  CREATE TABLE IF NOT EXISTS products (
+  DROP TABLE IF EXISTS products;
+
+  CREATE TABLE products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     store TEXT,
     catalog_folder TEXT,
@@ -23,24 +24,48 @@ db.exec(`
     discount_percent TEXT,
     raw_text TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
+  );
 `);
 
-// Вспомогательная функция очистки и парсинга цены
+// Список мусорных/служебных финских слов
+const STOP_WORDS = new Set([
+  'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
+  'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen'
+]);
+
 function parsePrice(str) {
   if (!str) return null;
+  
   let cleaned = str.replace(',', '.').replace(/[^0-9.]/g, '');
   
-  // Если OCR распознал "150" вместо "1.50"
+  // Если строка вида "150", превращаем в "1.50"
   if (/^\d{3,4}$/.test(cleaned)) {
     cleaned = (parseFloat(cleaned) / 100).toFixed(2);
   }
   
   const val = parseFloat(cleaned);
-  return isNaN(val) ? null : val;
+  
+  // Фильтруем аномальные цены (от 0.10€ до 150.00€)
+  if (isNaN(val) || val <= 0.10 || val > 150.00) {
+    return null;
+  }
+  
+  return val;
 }
 
-// Извлечение товаров из массива текстовых блоков страницы
+function isValidTitle(text) {
+  if (!text || text.length < 3) return false;
+  
+  const clean = text.trim().toLowerCase();
+  
+  // Игнорируем стоп-слова, проценты и сплошные цифры
+  if (STOP_WORDS.has(clean)) return false;
+  if (/%|\d{3,}/.test(clean)) return false;
+  if (/^[^a-zäöåA-ZÄÖÅ]+$/.test(clean)) return false; 
+
+  return true;
+}
+
 function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
   const products = [];
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
@@ -51,13 +76,14 @@ function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
 
     if (discountRegex.test(block)) {
       const discount = block.match(discountRegex)[0];
-      const contextSlice = textBlocks.slice(Math.max(0, i - 2), Math.min(textBlocks.length, i + 5));
+      const contextSlice = textBlocks.slice(Math.max(0, i - 3), Math.min(textBlocks.length, i + 6));
 
       let title = '';
       let price = null;
       let originalPrice = null;
 
       for (const item of contextSlice) {
+        // Проверяем цену
         if (priceRegex.test(item)) {
           const parsed = parsePrice(item);
           if (parsed && !price) {
@@ -65,18 +91,21 @@ function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
           } else if (parsed && price && !originalPrice && parsed !== price) {
             originalPrice = parsed;
           }
-        } else if (item.length > 3 && !discountRegex.test(item) && !title) {
+        } 
+        // Проверяем валидность названия товара
+        else if (isValidTitle(item) && !title) {
           title = item;
         }
       }
 
-      if (title || price) {
+      // Сохраняем только если цена находится в адекватном диапазоне
+      if (price) {
         products.push({
           store: 'lidl',
           catalog_folder: catalogFolder,
           page: pageName,
           product_name: title || 'Неизвестный товар',
-          price: price || 0,
+          price: price,
           original_price: originalPrice || 0,
           discount_percent: discount,
           raw_text: contextSlice.join(' | ')
@@ -88,12 +117,11 @@ function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
   return products;
 }
 
-// 3. Основной процесс чтения ocr_results.json и сохранения в SQLite
 function parseAllResults() {
   const lidlDir = path.join(process.cwd(), 'catalogs', 'lidl');
 
   if (!fs.existsSync(lidlDir)) {
-    console.log('Папка с каталогами catalogs/lidl не найдена!');
+    console.log('Папка catalogs/lidl не найдена!');
     return;
   }
 
@@ -120,7 +148,7 @@ function parseAllResults() {
     }
   }
 
-  console.log(`\nПарсинг завершен! Записано товаров в БД: ${totalInserted}`);
+  console.log(`\nПарсинг завершен! Записано очищенных товаров в БД: ${totalInserted}`);
 }
 
 parseAllResults();
