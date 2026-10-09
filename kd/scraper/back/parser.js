@@ -1,13 +1,21 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 
-const dbDir = path.join(process.cwd(), 'db');
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+// Определение __dirname для ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Гарантированные пути к корню проекта scraper/
+const DB_DIR = path.resolve(__dirname, '..', 'db');
+const LIDL_DIR = path.resolve(__dirname, '..', 'catalogs', 'lidl');
+
+if (!fs.existsSync(DB_DIR)) {
+  fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-const db = new Database(path.join(dbDir, 'products.db'));
+const db = new Database(path.join(DB_DIR, 'products.db'));
 
 // Пересоздаём таблицу
 db.exec(`
@@ -66,39 +74,79 @@ function isValidTitle(text) {
   return true;
 }
 
-function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
+// Вычисление центра Bounding Box [x_center, y_center]
+function getCenter(bbox) {
+  if (!bbox || bbox.length < 4) return [0, 0];
+  const xCoords = bbox.map(p => p[0]);
+  const yCoords = bbox.map(p => p[1]);
+  const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
+  const minY = Math.min(...yCoords), maxY = Math.max(...yCoords);
+  return [(minX + maxX) / 2, (minY + maxY) / 2];
+}
+
+// Расстояние между двумя центрами (Евклидово расстояние)
+function getDistance(center1, center2) {
+  return Math.sqrt(Math.pow(center1[0] - center2[0], 2) + Math.pow(center1[1] - center2[1], 2));
+}
+
+/**
+ * Spatial (геометрический) парсинг блоков с Bounding Boxes
+ */
+function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
   const products = [];
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
   const priceRegex = /(\d+[.,]\d{2}|\b\d{3,4}\b)/;
 
-  for (let i = 0; i < textBlocks.length; i++) {
-    const block = textBlocks[i];
+  // Если blocks пришил просто строками (fallback), преобразуем их
+  const normalizedBlocks = textBlocks.map(b => typeof b === 'string' ? { text: b, bbox: null } : b);
 
-    if (discountRegex.test(block)) {
-      const discount = block.match(discountRegex)[0];
-      const contextSlice = textBlocks.slice(Math.max(0, i - 3), Math.min(textBlocks.length, i + 6));
+  for (let i = 0; i < normalizedBlocks.length; i++) {
+    const block = normalizedBlocks[i];
+    const text = block.text || '';
+
+    if (discountRegex.test(text)) {
+      const discount = text.match(discountRegex)[0];
+      const discountCenter = block.bbox ? getCenter(block.bbox) : null;
+
+      let candidates = [];
+
+      if (discountCenter) {
+        // Поиск ближайших блоков на основе евклидова расстояния
+        candidates = normalizedBlocks
+          .filter((_, idx) => idx !== i)
+          .map(b => ({
+            ...b,
+            dist: b.bbox ? getDistance(discountCenter, getCenter(b.bbox)) : 99999
+          }))
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 8); // Берём 8 ближайших соседей
+      } else {
+        // Запасной линейный поиск, если координат нет
+        candidates = normalizedBlocks.slice(Math.max(0, i - 3), Math.min(normalizedBlocks.length, i + 6));
+      }
 
       let title = '';
       let price = null;
       let originalPrice = null;
 
-      for (const item of contextSlice) {
+      for (const item of candidates) {
+        const itemText = item.text || '';
+
         // Проверяем цену
-        if (priceRegex.test(item)) {
-          const parsed = parsePrice(item);
+        if (priceRegex.test(itemText)) {
+          const parsed = parsePrice(itemText);
           if (parsed && !price) {
             price = parsed;
           } else if (parsed && price && !originalPrice && parsed !== price) {
             originalPrice = parsed;
           }
         } 
-        // Проверяем валидность названия товара
-        else if (isValidTitle(item) && !title) {
-          title = item;
+        // Проверяем название товара
+        else if (isValidTitle(itemText) && !title) {
+          title = itemText;
         }
       }
 
-      // Сохраняем только если цена находится в адекватном диапазоне
       if (price) {
         products.push({
           store: 'lidl',
@@ -108,7 +156,7 @@ function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
           price: price,
           original_price: originalPrice || 0,
           discount_percent: discount,
-          raw_text: contextSlice.join(' | ')
+          raw_text: candidates.map(c => c.text).join(' | ')
         });
       }
     }
@@ -118,14 +166,12 @@ function extractProductsFromPage(textBlocks, pageName, catalogFolder) {
 }
 
 function parseAllResults() {
-  const lidlDir = path.join(process.cwd(), 'catalogs', 'lidl');
-
-  if (!fs.existsSync(lidlDir)) {
-    console.log('Папка catalogs/lidl не найдена!');
+  if (!fs.existsSync(LIDL_DIR)) {
+    console.log('Папка каталогов не найдена:', LIDL_DIR);
     return;
   }
 
-  const catalogFolders = fs.readdirSync(lidlDir).filter(f => f.startsWith('catalog_'));
+  const catalogFolders = fs.readdirSync(LIDL_DIR).filter(f => f.startsWith('catalog_'));
   const insertStmt = db.prepare(`
     INSERT INTO products (store, catalog_folder, page, product_name, price, original_price, discount_percent, raw_text)
     VALUES (@store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @raw_text)
@@ -134,13 +180,13 @@ function parseAllResults() {
   let totalInserted = 0;
 
   for (const folder of catalogFolders) {
-    const jsonPath = path.join(lidlDir, folder, 'ocr_results.json');
+    const jsonPath = path.join(LIDL_DIR, folder, 'ocr_results.json');
     if (!fs.existsSync(jsonPath)) continue;
 
     const pageResults = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
     for (const pageData of pageResults) {
-      const products = extractProductsFromPage(pageData.text_blocks, pageData.page, folder);
+      const products = extractProductsSpatial(pageData.text_blocks, pageData.page, folder);
       for (const prod of products) {
         insertStmt.run(prod);
         totalInserted++;

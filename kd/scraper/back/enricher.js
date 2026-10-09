@@ -1,5 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Определение __dirname для ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Гарантированный абсолютный путь к корневой папке scraper/catalogs/lidl
+const BASE_CATALOGS_DIR = path.resolve(__dirname, '..', 'catalogs', 'lidl');
 
 // URL нашего запущенного Python OCR микросервиса
 const OCR_SERVICE_URL = 'http://127.0.0.1:5000/process-image';
@@ -33,20 +41,18 @@ async function processImageWithOCR(imagePath) {
  * Основная функция обогащения всех каталогов Lidl
  */
 async function processAllCatalogs() {
-  const lidlCatalogsDir = path.join(process.cwd(), 'catalogs', 'lidl');
-
-  if (!fs.existsSync(lidlCatalogsDir)) {
-    console.log('Папка с каталогами не найдена:', lidlCatalogsDir);
+  if (!fs.existsSync(BASE_CATALOGS_DIR)) {
+    console.log('Папка с каталогами не найдена:', BASE_CATALOGS_DIR);
     return;
   }
 
   // Получаем список всех папок catalog_*
-  const catalogFolders = fs.readdirSync(lidlCatalogsDir).filter(folder => folder.startsWith('catalog_'));
+  const catalogFolders = fs.readdirSync(BASE_CATALOGS_DIR).filter(folder => folder.startsWith('catalog_'));
 
   console.log(`Найдено каталогов для обработки: ${catalogFolders.length}`);
 
   for (const catalogFolder of catalogFolders) {
-    const catalogPath = path.join(lidlCatalogsDir, catalogFolder);
+    const catalogPath = path.join(BASE_CATALOGS_DIR, catalogFolder);
     console.log(`\n--- Обработка каталога: ${catalogFolder} ---`);
 
     // Читаем все .png файлы из каталога и сортируем их по номеру страницы
