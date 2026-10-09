@@ -74,14 +74,18 @@ function isValidTitle(text) {
   return true;
 }
 
-// Вычисление центра Bounding Box [x_center, y_center]
+// Безопасное вычисление центра Bounding Box [x_center, y_center]
 function getCenter(bbox) {
-  if (!bbox || bbox.length < 4) return [0, 0];
-  const xCoords = bbox.map(p => p[0]);
-  const yCoords = bbox.map(p => p[1]);
-  const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
-  const minY = Math.min(...yCoords), maxY = Math.max(...yCoords);
-  return [(minX + maxX) / 2, (minY + maxY) / 2];
+  if (!Array.isArray(bbox) || bbox.length < 4) return [0, 0];
+  try {
+    const xCoords = bbox.map(p => Array.isArray(p) ? p[0] : 0);
+    const yCoords = bbox.map(p => Array.isArray(p) ? p[1] : 0);
+    const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
+    const minY = Math.min(...yCoords), maxY = Math.max(...yCoords);
+    return [(minX + maxX) / 2, (minY + maxY) / 2];
+  } catch (e) {
+    return [0, 0];
+  }
 }
 
 // Расстояние между двумя центрами (Евклидово расстояние)
@@ -97,8 +101,14 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
   const priceRegex = /(\d+[.,]\d{2}|\b\d{3,4}\b)/;
 
-  // Если blocks пришил просто строками (fallback), преобразуем их
-  const normalizedBlocks = textBlocks.map(b => typeof b === 'string' ? { text: b, bbox: null } : b);
+  if (!Array.isArray(textBlocks)) return products;
+
+  // Нормализуем входящие блоки
+  const normalizedBlocks = textBlocks.map(b => {
+    if (typeof b === 'string') return { text: b, bbox: null };
+    if (typeof b === 'object' && b !== null) return b;
+    return { text: String(b || ''), bbox: null };
+  });
 
   for (let i = 0; i < normalizedBlocks.length; i++) {
     const block = normalizedBlocks[i];
@@ -106,7 +116,8 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
 
     if (discountRegex.test(text)) {
       const discount = text.match(discountRegex)[0];
-      const discountCenter = block.bbox ? getCenter(block.bbox) : null;
+      const hasBbox = Array.isArray(block.bbox) && block.bbox.length >= 4;
+      const discountCenter = hasBbox ? getCenter(block.bbox) : null;
 
       let candidates = [];
 
@@ -116,7 +127,7 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
           .filter((_, idx) => idx !== i)
           .map(b => ({
             ...b,
-            dist: b.bbox ? getDistance(discountCenter, getCenter(b.bbox)) : 99999
+            dist: (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getDistance(discountCenter, getCenter(b.bbox)) : 99999
           }))
           .sort((a, b) => a.dist - b.dist)
           .slice(0, 8); // Берём 8 ближайших соседей
