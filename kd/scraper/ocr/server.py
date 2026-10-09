@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # Инициализируем EasyOCR
-reader = easyocr.Reader(['fi', 'en'], gpu=False)
+reader = easyocr.Reader(['sv', 'en'], gpu=False)
 
 @app.route('/process-image', methods=['POST'])
 def process_image():

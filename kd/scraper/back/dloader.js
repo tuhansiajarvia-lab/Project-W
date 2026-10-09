@@ -1,6 +1,14 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Определение __dirname для ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Гарантированный абсолютный путь к корневой папке scraper/catalogs/lidl
+const BASE_CATALOGS_DIR = path.resolve(__dirname, '..', 'catalogs', 'lidl');
 
 async function downloadCatalogs() {
   const browser = await chromium.launch({ headless: false });
@@ -68,8 +76,8 @@ async function downloadCatalogs() {
   for (let i = 0; i < catalogLinks.length; i++) {
     const link = catalogLinks[i];
     
-    // Формируем путь: kd/scraper/catalogs/lidl/catalog_1, catalog_2 ...
-    const folderName = path.join(process.cwd(), 'catalogs', 'lidl', `catalog_${i + 1}`);
+    // Путь теперь жестко зафиксирован относительно корня проекта scraper/
+    const folderName = path.join(BASE_CATALOGS_DIR, `catalog_${i + 1}`);
 
     if (!fs.existsSync(folderName)) {
       fs.mkdirSync(folderName, { recursive: true });
