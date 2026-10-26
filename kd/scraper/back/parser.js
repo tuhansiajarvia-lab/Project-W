@@ -17,7 +17,7 @@ if (!fs.existsSync(DB_DIR)) {
 
 const db = new Database(path.join(DB_DIR, 'products.db'));
 
-// Пересоздаём таблицу
+// Пересоздаём таблицу с раздельными полями для процентов и типов акций
 db.exec(`
   DROP TABLE IF EXISTS products;
 
@@ -29,7 +29,8 @@ db.exec(`
     product_name TEXT,
     price REAL,
     original_price REAL,
-    discount_percent TEXT,
+    discount_percent INTEGER,
+    offer_type TEXT,
     raw_text TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -101,6 +102,7 @@ function getDistance(center1, center2) {
 function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
   const products = [];
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
+  const percentMatchRegex = /-(\d{2})%/i;
   const priceRegex = /(\d+[.,]\d{2}|\b\d{3,4}\b)/;
 
   if (!Array.isArray(textBlocks)) return products;
@@ -117,7 +119,19 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
     const text = block.text || '';
 
     if (discountRegex.test(text)) {
-      const discount = text.match(discountRegex)[0];
+      const rawDiscountText = text.match(discountRegex)[0];
+      
+      let discountPercent = null;
+      let offerType = null;
+
+      // Разделяем на числовой процент или тип акции (kpl, Ota)
+      if (percentMatchRegex.test(rawDiscountText)) {
+        const match = rawDiscountText.match(percentMatchRegex);
+        discountPercent = parseInt(match[1], 10);
+      } else {
+        offerType = rawDiscountText;
+      }
+
       const hasBbox = Array.isArray(block.bbox) && block.bbox.length >= 4;
       const discountCenter = hasBbox ? getCenter(block.bbox) : null;
 
@@ -176,7 +190,8 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
           product_name: title || 'Неизвестный товар',
           price: price,
           original_price: originalPrice || 0,
-          discount_percent: discount,
+          discount_percent: discountPercent,
+          offer_type: offerType,
           raw_text: candidates.map(c => c.text).join(' | ')
         });
       }
@@ -194,8 +209,8 @@ function parseAllResults() {
 
   const catalogFolders = fs.readdirSync(LIDL_DIR).filter(f => f.startsWith('catalog_'));
   const insertStmt = db.prepare(`
-    INSERT INTO products (store, catalog_folder, page, product_name, price, original_price, discount_percent, raw_text)
-    VALUES (@store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @raw_text)
+    INSERT INTO products (store, catalog_folder, page, product_name, price, original_price, discount_percent, offer_type, raw_text)
+    VALUES (@store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @offer_type, @raw_text)
   `);
 
   let totalInserted = 0;
