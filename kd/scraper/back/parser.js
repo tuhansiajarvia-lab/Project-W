@@ -38,7 +38,8 @@ db.exec(`
 // Список мусорных/служебных финских слов
 const STOP_WORDS = new Set([
   'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
-  'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen'
+  'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen',
+  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'Kpl'
 ]);
 
 function parsePrice(str) {
