@@ -67,8 +67,9 @@ function isValidTitle(text) {
   
   const clean = text.trim().toLowerCase();
   
-  // Игнорируем стоп-слова, проценты и сплошные цифры
+  // Игнорируем стоп-слова, промо-фразы, проценты и сплошные цифры
   if (STOP_WORDS.has(clean)) return false;
+  if (clean.includes('lidl plus') || clean.includes('sovelluksella') || clean.includes('app')) return false;
   if (/%|\d{3,}/.test(clean)) return false;
   if (/^[^a-zäöåA-ZÄÖÅ]+$/.test(clean)) return false; 
 
