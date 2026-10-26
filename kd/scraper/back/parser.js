@@ -35,11 +35,11 @@ db.exec(`
   );
 `);
 
-// Список мусорных/служебных финских слов
+// Расширенный список мусорных и промо-слов
 const STOP_WORDS = new Set([
   'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
   'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen',
-  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'Kpl'
+  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl'
 ]);
 
 function parsePrice(str) {
@@ -157,6 +157,14 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
         // Проверяем название товара
         else if (isValidTitle(itemText) && !title) {
           title = itemText;
+        }
+      }
+
+      // Очищаем висячие дефисы на конце названий
+      if (title) {
+        title = title.trim();
+        if (title.endsWith('-')) {
+          title = title.slice(0, -1).trim();
         }
       }
 
