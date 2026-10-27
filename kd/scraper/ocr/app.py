@@ -1,8 +1,8 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import easyocr
-import io
-from PIL import Image
 import torch
+import os
 
 app = FastAPI()
 
@@ -15,17 +15,34 @@ if use_gpu:
 # Инициализируем EasyOCR на видеокарте
 reader = easyocr.Reader(['en'], gpu=use_gpu)
 
-@app.post("/ocr")
-async def process_image(file: UploadFile = File(...)):
+class ImageRequest(BaseModel):
+    image_path: str
+
+@app.post("/process-image")
+async def process_image(req: ImageRequest):
+    if not os.path.exists(req.image_path):
+        raise HTTPException(status_code=404, detail=f"Файл не найден: {req.image_path}")
+    
     try:
-        contents = await file.read()
-        # Запуск быстрого распознавания на тензорных ядрах GPU
-        results = reader.readtext(contents, detail=0)
-        extracted_text = "\n".join(results)
-        return {"success": True, "text": extracted_text}
+        # Запуск распознавания с возвратом координат (bbox) и текста
+        raw_results = reader.readtext(req.image_path)
+        
+        text_blocks = []
+        for item in raw_results:
+            bbox, text, prob = item
+            text_blocks.append({
+                "bbox": bbox,
+                "text": text,
+                "confidence": float(prob)
+            })
+            
+        return {
+            "success": True,
+            "text_blocks": text_blocks
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=5000)

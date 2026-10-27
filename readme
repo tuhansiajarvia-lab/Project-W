@@ -1,4 +1,3 @@
-pip install flask easyocr torch torchvision pillow - установка Flask и всех зависимостей OCR
 
 python server.py - запуск локального микросервиса распознавания текста (OCR) на базе Python, Flask и библиотеки EasyOCR.
 node dloader.js - запуск загрузчика каталогов 
