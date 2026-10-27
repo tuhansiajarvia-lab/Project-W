@@ -15,7 +15,7 @@ const frontPath = path.resolve(process.cwd(), 'front');
 app.use(express.static(frontPath));
 
 // Указываем путь к БД в папке db/
-const dbPath = path.resolve(process.cwd(), 'db', 'products.db');
+const dbPath = path.resolve(process.cwd(), '..', 'db', 'products.db');
 const db = new Database(dbPath, { readonly: true });
 
 // API: Получить список категорий (каталогов)
