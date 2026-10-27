@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // Раздаём статику из папки front/ (поднимаемся на уровень выше из back/, если файл в back/)
-const frontPath = path.resolve(process.cwd(), 'front');
+const frontPath = path.resolve(process.cwd(), '..', 'front');
 app.use(express.static(frontPath));
 
 // Указываем путь к БД в папке db/
