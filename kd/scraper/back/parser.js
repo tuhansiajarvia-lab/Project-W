@@ -36,11 +36,11 @@ db.exec(`
   );
 `);
 
-// Расширенный список мусорных и промо-слов
+// Расширенный список мусорных и промо-слов (исключаем из названий)
 const STOP_WORDS = new Set([
   'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
   'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen',
-  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl'
+  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl', 'ota', 'kplta'
 ]);
 
 function parsePrice(str) {
@@ -55,8 +55,8 @@ function parsePrice(str) {
   
   const val = parseFloat(cleaned);
   
-  // Фильтруем аномальные цены (от 0.10€ до 150.00€)
-  if (isNaN(val) || val <= 0.10 || val > 150.00) {
+  // Фильтруем аномальные цены (от 0.10€ до 50.00€ для розницы)
+  if (isNaN(val) || val <= 0.05 || val > 50.00) {
     return null;
   }
   
@@ -73,6 +73,8 @@ function isValidTitle(text) {
   if (clean.includes('lidl plus') || clean.includes('sovelluksella') || clean.includes('app')) return false;
   if (/%|\d{3,}/.test(clean)) return false;
   if (/^[^a-zäöåA-ZÄÖÅ]+$/.test(clean)) return false; 
+  // Отсекаем строки, которые состоят только из цифр и мер (например, "2 kpl")
+  if (/^\d+\s*(kpl|g|kg|ml|l)$/i.test(clean)) return false;
 
   return true;
 }
@@ -124,7 +126,6 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
       let discountPercent = null;
       let offerType = null;
 
-      // Разделяем на числовой процент или тип акции (kpl, Ota)
       if (percentMatchRegex.test(rawDiscountText)) {
         const match = rawDiscountText.match(percentMatchRegex);
         discountPercent = parseInt(match[1], 10);
@@ -138,7 +139,6 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
       let candidates = [];
 
       if (discountCenter) {
-        // Поиск ближайших блоков на основе евклидова расстояния
         candidates = normalizedBlocks
           .filter((_, idx) => idx !== i)
           .map(b => ({
@@ -146,31 +146,41 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
             dist: (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getDistance(discountCenter, getCenter(b.bbox)) : 99999
           }))
           .sort((a, b) => a.dist - b.dist)
-          .slice(0, 8); // Берём 8 ближайших соседей
+          .slice(0, 10); // Берём 10 ближайших соседей для надежности
       } else {
-        // Запасной линейный поиск, если координат нет
-        candidates = normalizedBlocks.slice(Math.max(0, i - 3), Math.min(normalizedBlocks.length, i + 6));
+        candidates = normalizedBlocks.slice(Math.max(0, i - 4), Math.min(normalizedBlocks.length, i + 6));
       }
 
       let title = '';
-      let price = null;
-      let originalPrice = null;
+      const foundPrices = [];
 
       for (const item of candidates) {
         const itemText = item.text || '';
 
-        // Проверяем цену
+        // Собираем все валидные цены из кандидатов
         if (priceRegex.test(itemText)) {
           const parsed = parsePrice(itemText);
-          if (parsed && !price) {
-            price = parsed;
-          } else if (parsed && price && !originalPrice && parsed !== price) {
-            originalPrice = parsed;
+          if (parsed && !foundPrices.includes(parsed)) {
+            foundPrices.push(parsed);
           }
         } 
         // Проверяем название товара
         else if (isValidTitle(itemText) && !title) {
           title = itemText;
+        }
+      }
+
+      let price = null;
+      let originalPrice = null;
+
+      // Умное распределение цен: меньшая цена всегда текущая, большая — старая
+      if (foundPrices.length > 0) {
+        foundPrices.sort((a, b) => a - b); // Сортируем по возрастанию
+        if (foundPrices.length >= 2) {
+          price = foundPrices[0];         // Меньшая цена — актуальная
+          originalPrice = foundPrices[foundPrices.length - 1]; // Большая — старая
+        } else {
+          price = foundPrices[0];
         }
       }
 
@@ -187,7 +197,7 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
           store: 'lidl',
           catalog_folder: catalogFolder,
           page: pageName,
-          product_name: title || 'Неизвестный товар',
+          product_name: title || 'Tarjoustuote',
           price: price,
           original_price: originalPrice || 0,
           discount_percent: discountPercent,
@@ -214,6 +224,9 @@ function parseAllResults() {
   `);
 
   let totalInserted = 0;
+
+  // Очищаем старые данные перед новой вставкой
+  db.exec('DELETE FROM products;');
 
   for (const folder of catalogFolders) {
     const jsonPath = path.join(LIDL_DIR, folder, 'ocr_results.json');

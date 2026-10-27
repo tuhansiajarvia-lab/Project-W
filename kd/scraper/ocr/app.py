@@ -13,7 +13,7 @@ if use_gpu:
     print(f"Используется GPU: {torch.cuda.get_device_name(0)}")
 
 # Инициализируем EasyOCR на видеокарте
-reader = easyocr.Reader(['fin', 'en'], gpu=use_gpu)
+reader = easyocr.Reader(['en'], gpu=use_gpu)
 
 @app.post("/ocr")
 async def process_image(file: UploadFile = File(...)):
