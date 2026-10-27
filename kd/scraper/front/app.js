@@ -1,104 +1,147 @@
-let currentLang = 'fi';
-let currentCategory = 'all';
-let searchQuery = '';
-
-const i18n = {
-  fi: { searchPlaceholder: 'Etsi tuotetta...', allCategories: 'Kaikki kategoriat', noResults: 'Tuotteita ei löytynyt' },
-  en: { searchPlaceholder: 'Search product...', allCategories: 'All Categories', noResults: 'No products found' },
-  ru: { searchPlaceholder: 'Поиск товара...', allCategories: 'Все категории', noResults: 'Товары не найдены' }
+// Глобальное состояние приложения
+const state = {
+  products: [],
+  categories: [],
+  selectedCategory: 'all',
+  searchQuery: '',
+  currentLang: 'fi'
 };
 
-async function loadCategories() {
+// Элементы DOM
+const productGrid = document.getElementById('product-grid');
+const searchInput = document.getElementById('search-input');
+const categoryFilter = document.getElementById('category-filter');
+
+// Инициализация приложения
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
+async function initApp() {
+  await fetchCategories();
+  await fetchProducts();
+  setupEventListeners();
+}
+
+// Загрузка категорий с сервера
+async function fetchCategories() {
   try {
-    const res = await fetch(`/api/categories?lang=${currentLang}`);
+    const res = await fetch('/api/categories');
     const data = await res.json();
-
-    const select = document.getElementById('categorySelect');
-    select.innerHTML = `<option value="all">${i18n[currentLang].allCategories}</option>`;
-
+    
     if (data.success) {
-      data.categories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        if (cat === currentCategory) option.selected = true;
-        select.appendChild(option);
-      });
+      state.categories = data.categories;
+      renderCategoryDropdown();
     }
   } catch (err) {
     console.error('Ошибка загрузки категорий:', err);
   }
 }
 
-async function loadProducts() {
+// Загрузка товаров с сервера с учетом поиска и категорий
+async function fetchProducts() {
   try {
-    const res = await fetch(`/api/products?lang=${currentLang}&category=${encodeURIComponent(currentCategory)}&search=${encodeURIComponent(searchQuery)}`);
+    const params = new URLSearchParams();
+    if (state.searchQuery) params.append('search', state.searchQuery);
+    if (state.selectedCategory !== 'all') params.append('category', state.selectedCategory);
+
+    const res = await fetch(`/api/products?${params.toString()}`);
     const data = await res.json();
 
-    const grid = document.getElementById('productsGrid');
-    grid.innerHTML = '';
-
-    if (!data.success || data.data.length === 0) {
-      grid.innerHTML = `<div class="no-results">${i18n[currentLang].noResults}</div>`;
-      return;
+    if (data.success) {
+      state.products = data.data;
+      renderProducts();
     }
-
-    data.data.forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'product-card';
-
-      const discountBadge = item.discount_percent 
-        ? `<div class="badge">${item.discount_percent}</div>` 
-        : '';
-
-      const oldPrice = item.original_price 
-        ? `<span class="old-price">${item.original_price.toFixed(2)} €</span>` 
-        : '';
-
-      card.innerHTML = `
-        ${discountBadge}
-        <div>
-          <div class="category-tag">${item.category || ''}</div>
-          <div class="product-title">${item.name || 'Nimetön tuote'}</div>
-        </div>
-        <div>
-          <div class="price-container">
-            <span class="price">${item.price ? item.price.toFixed(2) : '—'} €</span>
-            ${oldPrice}
-          </div>
-          <div class="unit">${item.unit || ''}</div>
-        </div>
-      `;
-
-      grid.appendChild(card);
-    });
   } catch (err) {
-    console.error('Ошибка загрузки продуктов:', err);
+    console.error('Ошибка загрузки товаров:', err);
+    if (productGrid) {
+      productGrid.innerHTML = `<p class="error">Не удалось загрузить товары.</p>`;
+    }
   }
 }
 
-function setLanguage(lang) {
-  currentLang = lang;
-  document.querySelectorAll('.lang-picker button').forEach(btn => btn.classList.remove('active'));
-  document.getElementById(`lang-${lang}`).classList.add('active');
+// Отрисовка списка категорий в <select>
+function renderCategoryDropdown() {
+  if (!categoryFilter) return;
 
-  document.getElementById('searchInput').placeholder = i18n[lang].searchPlaceholder;
-
-  currentCategory = 'all';
-  loadCategories();
-  loadProducts();
+  const defaultOption = `<option value="all">Все категории / каталоги</option>`;
+  const options = state.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+  
+  categoryFilter.innerHTML = defaultOption + options;
 }
 
-function handleSearch() {
-  searchQuery = document.getElementById('searchInput').value;
-  loadProducts();
+// Отрисовка карточек товаров в сетке
+function renderProducts() {
+  if (!productGrid) return;
+
+  if (state.products.length === 0) {
+    productGrid.innerHTML = `<div class="no-results">Товары не найдены</div>`;
+    return;
+  }
+
+  productGrid.innerHTML = state.products.map(product => {
+    // Формируем плашку скидки или типа акции
+    let badgeHtml = '';
+    if (product.discount_percent) {
+      badgeHtml = `<span class="badge discount">-${product.discount_percent}%</span>`;
+    } else if (product.offer_type) {
+      badgeHtml = `<span class="badge offer">${product.offer_type}</span>`;
+    }
+
+    // Формируем отображение старой цены
+    const oldPriceHtml = product.original_price && product.original_price > 0 
+      ? `<span class="old-price">${product.original_price.toFixed(2)} €</span>` 
+      : '';
+
+    return `
+      <div class="product-card">
+        <div class="card-header">
+          <span class="store-tag">${product.store ? product.store.toUpperCase() : 'STORE'}</span>
+          ${badgeHtml}
+        </div>
+        <div class="card-body">
+          <h3 class="product-title">${escapeHtml(product.name || 'Без названия')}</h3>
+          <p class="catalog-info">Каталог: ${escapeHtml(product.catalog_folder)} (Стр. ${product.page || 1})</p>
+        </div>
+        <div class="card-footer">
+          <div class="price-container">
+            ${oldPriceHtml}
+            <span class="current-price">${product.price ? product.price.toFixed(2) : 'N/A'} €</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
-function handleCategoryChange() {
-  currentCategory = document.getElementById('categorySelect').value;
-  loadProducts();
+// Настройка обработчиков событий (поиск, фильтр)
+function setupEventListeners() {
+  // Живой поиск с задержкой (Debounce)
+  if (searchInput) {
+    let debounceTimer;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        state.searchQuery = e.target.value.trim();
+        fetchProducts();
+      }, 300);
+    });
+  }
+
+  // Фильтр по категориям
+  if (categoryFilter) {
+    categoryFilter.addEventListener('change', (e) => {
+      state.selectedCategory = e.target.value;
+      fetchProducts();
+    });
+  }
 }
 
-// Инициализация при старте
-loadCategories();
-loadProducts();
+// Вспомогательная функция для защиты от XSS
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+};
