@@ -12,7 +12,7 @@ use_gpu = torch.cuda.is_available()
 print(f"CUDA доступна: {use_gpu}")
 
 # Инициализируем EasyOCR
-reader = easyocr.Reader(['en', 'fi'], gpu=use_gpu)
+reader = easyocr.Reader(['en', 'la'], gpu=use_gpu)
 
 class ImageRequest(BaseModel):
     image_path: str

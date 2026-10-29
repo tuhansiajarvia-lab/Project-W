@@ -3,11 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 
-// Определение __dirname для ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Гарантированные пути к корню проекта scraper/
 const DB_DIR = path.resolve(__dirname, '..', 'db');
 const LIDL_DIR = path.resolve(__dirname, '..', 'catalogs', 'lidl');
 
@@ -17,7 +15,6 @@ if (!fs.existsSync(DB_DIR)) {
 
 const db = new Database(path.join(DB_DIR, 'products.db'));
 
-// Пересоздаём таблицу с раздельными полями для процентов и типов акций
 db.exec(`
   DROP TABLE IF EXISTS products;
 
@@ -36,86 +33,66 @@ db.exec(`
   );
 `);
 
-// Расширенный список мусорных и промо-слов (исключаем из названий)
+// Расширенный список стоп-слов для отсечения маркетингового мусора
 const STOP_WORDS = new Set([
   'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
   'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen',
   'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl', 'ota', 'kplta',
-  'se', 'klo', 'vaan', 'ja', 'from', 'to'
+  'se', 'klo', 'ja', 'from', 'to', 'aina halvat hinnat'
 ]);
 
 function parsePrice(str) {
   if (!str) return null;
-  
-  // Убираем всё, кроме цифр, запятых и точек
   let cleaned = str.replace(',', '.').replace(/[^0-9.]/g, '');
-  
-  // Если распарсилось несколько точек, оставляем последнюю или склеиваем правильно
   const parts = cleaned.split('.');
   if (parts.length > 2) {
     cleaned = parts[parts.length - 2] + '.' + parts[parts.length - 1];
   }
-
-  // Если строка вида "150" без точки, но похожа на цену
   if (/^\d{3,4}$/.test(cleaned)) {
     cleaned = (parseFloat(cleaned) / 100).toFixed(2);
   }
-  
   const val = parseFloat(cleaned);
-  
-  // Фильтруем аномальные цены (от 0.20€ до 50.00€ для розницы в каталогах)
   if (isNaN(val) || val < 0.20 || val > 50.00) {
     return null;
   }
-  
   return val;
 }
 
 function isValidTitle(text) {
   if (!text || text.length < 3) return false;
-  
   const clean = text.trim();
   const lower = clean.toLowerCase();
-  
-  // Игнорируем стоп-слова и промо-фразы
+
+  // Отсекаем стоп-слова и рекламные слоганы целиком
   if (STOP_WORDS.has(lower)) return false;
-  if (lower.includes('lidl plus') || lower.includes('sovelluksella') || lower.includes('app')) return false;
-  
-  // Отсекаем строки, содержащие проценты или состоящие сплошной цифрой
+  if (lower.includes('aina halvat') || lower.includes('lidl plus') || lower.includes('sovelluksella')) return false;
   if (/%|\d{3,}/.test(lower)) return false;
-  
-  // Строгая проверка: в названии обязательно должны быть нормальные буквы (включая финские ä, ö, å)
+
+  // Название должно содержать минимум одно нормальное финское/латинское слово из 3+ букв
   if (!/[a-zäöåA-ZÄÖÅ]{3,}/.test(clean)) return false; 
 
-  // Отсекаем строки, которые состоят только из мер или цен
+  // Отсекаем мусор вроде случайных буквосочетаний без гласных (как hntksean или aooeahone)
+  const vowels = (clean.match(/[aeiouyäöå]/gi) || []).length;
+  if (vowels < 2) return false;
+
+  // Отсекаем мерки и чистые цены
   if (/^\d+\s*(kpl|g|kg|ml|l|eur|€)$/i.test(clean)) return false;
   if (/^\d+[.,]\d{2}\s*€?$/.test(clean)) return false;
 
   return true;
 }
 
-// Безопасное вычисление центра Bounding Box [x_center, y_center]
 function getCenter(bbox) {
   if (!Array.isArray(bbox) || bbox.length < 4) return [0, 0];
   try {
     const xCoords = bbox.map(p => Array.isArray(p) ? p[0] : 0);
     const yCoords = bbox.map(p => Array.isArray(p) ? p[1] : 0);
-    const minX = Math.min(...xCoords), maxX = Math.max(...xCoords);
-    const minY = Math.min(...yCoords), maxY = Math.max(...yCoords);
-    return [(minX + maxX) / 2, (minY + maxY) / 2];
+    return [(Math.min(...xCoords) + Math.max(...xCoords)) / 2, (Math.min(...yCoords) + Math.max(...yCoords)) / 2];
   } catch (e) {
     return [0, 0];
   }
 }
 
-// Расстояние между двумя центрами (Евклидово расстояние)
-function getDistance(center1, center2) {
-  return Math.sqrt(Math.pow(center1[0] - center2[0], 2) + Math.pow(center1[1] - center2[1], 2));
-}
-
-/**
- * Spatial (геометрический) парсинг блоков с Bounding Boxes
- */
 function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
   const products = [];
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
@@ -124,7 +101,6 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
 
   if (!Array.isArray(textBlocks)) return products;
 
-  // Нормализуем входящие блоки
   const normalizedBlocks = textBlocks.map(b => {
     if (typeof b === 'string') return { text: b, bbox: null };
     if (typeof b === 'object' && b !== null) return b;
@@ -135,68 +111,68 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
     const block = normalizedBlocks[i];
     const text = block.text || '';
 
-    // Ищем маркер акции/скидки или ценник как опорную точку
+    // Ищем цену или акцию как опорную точку карточки
     if (discountRegex.test(text) || priceRegex.test(text)) {
       const hasBbox = Array.isArray(block.bbox) && block.bbox.length >= 4;
-      const center = hasBbox ? getCenter(block.bbox) : null;
+      const center = hasBbox ? getCenter(block.bbox) : [0, 0];
 
-      let candidates = [];
-
-      if (center) {
-        // Собираем ближайших соседей по координатам (в радиусе карточки товара)
-        candidates = normalizedBlocks
-          .filter((_, idx) => idx !== i)
-          .map(b => ({
+      // Ищем блоки, которые находятся РЯДОМ и ЧУТЬ ВЫШЕ цены (где обычно пишется название товара)
+      const candidates = normalizedBlocks
+        .filter((_, idx) => idx !== i)
+        .map(b => {
+          const bCenter = (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getCenter(b.bbox) : [0, 0];
+          const dx = Math.abs(center[0] - bCenter[0]);
+          const dy = center[1] - bCenter[1]; // Положительное dy означает, что блок находится ВЫШЕ цены
+          return {
             ...b,
-            dist: (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getDistance(center, getCenter(b.bbox)) : 99999
-          }))
-          .sort((a, b) => a.dist - b.dist)
-          .filter(b => b.dist < 250) // Ограничиваем радиус поиска соседей в пикселях страницы
-          .slice(0, 8); // Берём до 8 ближайших блоков
-      } else {
-        candidates = normalizedBlocks.slice(Math.max(0, i - 3), Math.min(normalizedBlocks.length, i + 4));
-      }
+            dx,
+            dy,
+            // Приоритет блокам, которые находятся по горизонтали недалеко и чуть выше цены
+            score: dx + (dy >= 0 && dy < 150 ? dy * 0.5 : 500)
+          };
+        })
+        .sort((a, b) => a.score - b.score)
+        .filter(b => b.dx < 180 && b.dy > -50 && b.dy < 200) // Жесткие рамки карточки товара
+        .slice(0, 6);
 
       let title = '';
       const foundPrices = [];
       let discountPercent = null;
       let offerType = null;
 
-      // Проверяем текущий блок на наличие скидки
       if (discountRegex.test(text)) {
-        const rawDiscountText = text.match(discountRegex)[0];
-        if (percentMatchRegex.test(rawDiscountText)) {
-          const match = rawDiscountText.match(percentMatchRegex);
-          discountPercent = parseInt(match[1], 10);
+        const matchVal = text.match(discountRegex)[0];
+        if (percentMatchRegex.test(matchVal)) {
+          discountPercent = parseInt(matchVal.match(percentMatchRegex)[1], 10);
         } else {
-          offerType = rawDiscountText;
+          offerType = matchVal;
         }
       }
 
-      // Анализируем кандидатов вокруг опорной точки
+      // Проверяем текущий блок и кандидатов на цены и название
+      if (priceRegex.test(text)) {
+        const p = parsePrice(text);
+        if (p) foundPrices.push(p);
+      }
+
       for (const item of candidates) {
         const itemText = item.text || '';
 
-        // Проверяем на скидку в соседних блоках, если еще не нашли
         if (!discountPercent && !offerType && discountRegex.test(itemText)) {
-          const rawDiscountText = itemText.match(discountRegex)[0];
-          if (percentMatchRegex.test(rawDiscountText)) {
-            const match = rawDiscountText.match(percentMatchRegex);
-            discountPercent = parseInt(match[1], 10);
+          const matchVal = itemText.match(discountRegex)[0];
+          if (percentMatchRegex.test(matchVal)) {
+            discountPercent = parseInt(matchVal.match(percentMatchRegex)[1], 10);
           } else {
-            offerType = rawDiscountText;
+            offerType = matchVal;
           }
         }
 
-        // Собираем цены
         if (priceRegex.test(itemText)) {
           const parsed = parsePrice(itemText);
           if (parsed && !foundPrices.includes(parsed)) {
             foundPrices.push(parsed);
           }
-        } 
-        // Ищем валидное название товара
-        else if (!title && isValidTitle(itemText)) {
+        } else if (!title && isValidTitle(itemText)) {
           title = itemText;
         }
       }
@@ -204,7 +180,6 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
       let price = null;
       let originalPrice = null;
 
-      // Умное распределение цен: меньшая цена — актуальная, большая — старая
       if (foundPrices.length > 0) {
         foundPrices.sort((a, b) => a - b);
         if (foundPrices.length >= 2) {
@@ -215,17 +190,12 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
         }
       }
 
-      // Чистим название от висящих дефисов
       if (title) {
-        title = title.trim();
-        if (title.endsWith('-')) {
-          title = title.slice(0, -1).trim();
-        }
+        title = title.trim().replace(/-$/, '').trim();
       }
 
-      // Добавляем товар в массив, только если у него есть адекватная цена и название
+      // Додаем товар только при наличии реального названия и цены
       if (price && title) {
-        // Защита от дубликатов в рамках одной страницы
         const exists = products.some(p => p.product_name === title && p.price === price);
         if (!exists) {
           products.push({
@@ -260,8 +230,6 @@ function parseAllResults() {
   `);
 
   let totalInserted = 0;
-
-  // Очищаем старые данные перед новой вставкой
   db.exec('DELETE FROM products;');
 
   for (const folder of catalogFolders) {
