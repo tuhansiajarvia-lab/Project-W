@@ -3,11 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Определение __dirname для ES Modules
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Гарантированный абсолютный путь к корневой папке scraper/catalogs/lidl
+
 const BASE_CATALOGS_DIR = path.resolve(__dirname, '..', 'catalogs', 'lidl');
 
 async function downloadCatalogs() {
