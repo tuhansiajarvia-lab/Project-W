@@ -40,23 +40,31 @@ db.exec(`
 const STOP_WORDS = new Set([
   'parasta', 'sesongin', 'aina', 'halvat', 'hinnat', 'kannattaa', 
   'tarjoukset', 'sulje', 'valikko', 'plus', 'lidl', 'erä', 'alkaen',
-  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl', 'ota', 'kplta'
+  'sovelluksella', 'apilla', 'etu', 'voimassa', 'vaan', 'kpl', 'ota', 'kplta',
+  'se', 'klo', 'vaan', 'ja', 'from', 'to'
 ]);
 
 function parsePrice(str) {
   if (!str) return null;
   
+  // Убираем всё, кроме цифр, запятых и точек
   let cleaned = str.replace(',', '.').replace(/[^0-9.]/g, '');
   
-  // Если строка вида "150", превращаем в "1.50"
+  // Если распарсилось несколько точек, оставляем последнюю или склеиваем правильно
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = parts[parts.length - 2] + '.' + parts[parts.length - 1];
+  }
+
+  // Если строка вида "150" без точки, но похожа на цену
   if (/^\d{3,4}$/.test(cleaned)) {
     cleaned = (parseFloat(cleaned) / 100).toFixed(2);
   }
   
   const val = parseFloat(cleaned);
   
-  // Фильтруем аномальные цены (от 0.10€ до 50.00€ для розницы)
-  if (isNaN(val) || val <= 0.05 || val > 50.00) {
+  // Фильтруем аномальные цены (от 0.20€ до 50.00€ для розницы в каталогах)
+  if (isNaN(val) || val < 0.20 || val > 50.00) {
     return null;
   }
   
@@ -66,15 +74,22 @@ function parsePrice(str) {
 function isValidTitle(text) {
   if (!text || text.length < 3) return false;
   
-  const clean = text.trim().toLowerCase();
+  const clean = text.trim();
+  const lower = clean.toLowerCase();
   
-  // Игнорируем стоп-слова, промо-фразы, проценты и сплошные цифры
-  if (STOP_WORDS.has(clean)) return false;
-  if (clean.includes('lidl plus') || clean.includes('sovelluksella') || clean.includes('app')) return false;
-  if (/%|\d{3,}/.test(clean)) return false;
-  if (/^[^a-zäöåA-ZÄÖÅ]+$/.test(clean)) return false; 
-  // Отсекаем строки, которые состоят только из цифр и мер (например, "2 kpl")
-  if (/^\d+\s*(kpl|g|kg|ml|l)$/i.test(clean)) return false;
+  // Игнорируем стоп-слова и промо-фразы
+  if (STOP_WORDS.has(lower)) return false;
+  if (lower.includes('lidl plus') || lower.includes('sovelluksella') || lower.includes('app')) return false;
+  
+  // Отсекаем строки, содержащие проценты или состоящие сплошной цифрой
+  if (/%|\d{3,}/.test(lower)) return false;
+  
+  // Строгая проверка: в названии обязательно должны быть нормальные буквы (включая финские ä, ö, å)
+  if (!/[a-zäöåA-ZÄÖÅ]{3,}/.test(clean)) return false; 
+
+  // Отсекаем строки, которые состоят только из мер или цен
+  if (/^\d+\s*(kpl|g|kg|ml|l|eur|€)$/i.test(clean)) return false;
+  if (/^\d+[.,]\d{2}\s*€?$/.test(clean)) return false;
 
   return true;
 }
@@ -105,7 +120,7 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
   const products = [];
   const discountRegex = /(-\d{2}%|\d+\s*kpl|Ota\s*\d+)/i;
   const percentMatchRegex = /-(\d{2})%/i;
-  const priceRegex = /(\d+[.,]\d{2}|\b\d{3,4}\b)/;
+  const priceRegex = /(\d+[.,]\d{2})/;
 
   if (!Array.isArray(textBlocks)) return products;
 
@@ -120,52 +135,68 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
     const block = normalizedBlocks[i];
     const text = block.text || '';
 
-    if (discountRegex.test(text)) {
-      const rawDiscountText = text.match(discountRegex)[0];
-      
-      let discountPercent = null;
-      let offerType = null;
-
-      if (percentMatchRegex.test(rawDiscountText)) {
-        const match = rawDiscountText.match(percentMatchRegex);
-        discountPercent = parseInt(match[1], 10);
-      } else {
-        offerType = rawDiscountText;
-      }
-
+    // Ищем маркер акции/скидки или ценник как опорную точку
+    if (discountRegex.test(text) || priceRegex.test(text)) {
       const hasBbox = Array.isArray(block.bbox) && block.bbox.length >= 4;
-      const discountCenter = hasBbox ? getCenter(block.bbox) : null;
+      const center = hasBbox ? getCenter(block.bbox) : null;
 
       let candidates = [];
 
-      if (discountCenter) {
+      if (center) {
+        // Собираем ближайших соседей по координатам (в радиусе карточки товара)
         candidates = normalizedBlocks
           .filter((_, idx) => idx !== i)
           .map(b => ({
             ...b,
-            dist: (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getDistance(discountCenter, getCenter(b.bbox)) : 99999
+            dist: (Array.isArray(b.bbox) && b.bbox.length >= 4) ? getDistance(center, getCenter(b.bbox)) : 99999
           }))
           .sort((a, b) => a.dist - b.dist)
-          .slice(0, 10); // Берём 10 ближайших соседей для надежности
+          .filter(b => b.dist < 250) // Ограничиваем радиус поиска соседей в пикселях страницы
+          .slice(0, 8); // Берём до 8 ближайших блоков
       } else {
-        candidates = normalizedBlocks.slice(Math.max(0, i - 4), Math.min(normalizedBlocks.length, i + 6));
+        candidates = normalizedBlocks.slice(Math.max(0, i - 3), Math.min(normalizedBlocks.length, i + 4));
       }
 
       let title = '';
       const foundPrices = [];
+      let discountPercent = null;
+      let offerType = null;
 
+      // Проверяем текущий блок на наличие скидки
+      if (discountRegex.test(text)) {
+        const rawDiscountText = text.match(discountRegex)[0];
+        if (percentMatchRegex.test(rawDiscountText)) {
+          const match = rawDiscountText.match(percentMatchRegex);
+          discountPercent = parseInt(match[1], 10);
+        } else {
+          offerType = rawDiscountText;
+        }
+      }
+
+      // Анализируем кандидатов вокруг опорной точки
       for (const item of candidates) {
         const itemText = item.text || '';
 
-        // Собираем все валидные цены из кандидатов
+        // Проверяем на скидку в соседних блоках, если еще не нашли
+        if (!discountPercent && !offerType && discountRegex.test(itemText)) {
+          const rawDiscountText = itemText.match(discountRegex)[0];
+          if (percentMatchRegex.test(rawDiscountText)) {
+            const match = rawDiscountText.match(percentMatchRegex);
+            discountPercent = parseInt(match[1], 10);
+          } else {
+            offerType = rawDiscountText;
+          }
+        }
+
+        // Собираем цены
         if (priceRegex.test(itemText)) {
           const parsed = parsePrice(itemText);
           if (parsed && !foundPrices.includes(parsed)) {
             foundPrices.push(parsed);
           }
         } 
-        // Проверяем название товара
-        else if (isValidTitle(itemText) && !title) {
+        // Ищем валидное название товара
+        else if (!title && isValidTitle(itemText)) {
           title = itemText;
         }
       }
@@ -173,18 +204,18 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
       let price = null;
       let originalPrice = null;
 
-      // Умное распределение цен: меньшая цена всегда текущая, большая — старая
+      // Умное распределение цен: меньшая цена — актуальная, большая — старая
       if (foundPrices.length > 0) {
-        foundPrices.sort((a, b) => a - b); // Сортируем по возрастанию
+        foundPrices.sort((a, b) => a - b);
         if (foundPrices.length >= 2) {
-          price = foundPrices[0];         // Меньшая цена — актуальная
-          originalPrice = foundPrices[foundPrices.length - 1]; // Большая — старая
+          price = foundPrices[0];
+          originalPrice = foundPrices[foundPrices.length - 1];
         } else {
           price = foundPrices[0];
         }
       }
 
-      // Очищаем висячие дефисы на конце названий
+      // Чистим название от висящих дефисов
       if (title) {
         title = title.trim();
         if (title.endsWith('-')) {
@@ -192,18 +223,23 @@ function extractProductsSpatial(textBlocks, pageName, catalogFolder) {
         }
       }
 
-      if (price) {
-        products.push({
-          store: 'lidl',
-          catalog_folder: catalogFolder,
-          page: pageName,
-          product_name: title || 'Tarjoustuote',
-          price: price,
-          original_price: originalPrice || 0,
-          discount_percent: discountPercent,
-          offer_type: offerType,
-          raw_text: candidates.map(c => c.text).join(' | ')
-        });
+      // Добавляем товар в массив, только если у него есть адекватная цена и название
+      if (price && title) {
+        // Защита от дубликатов в рамках одной страницы
+        const exists = products.some(p => p.product_name === title && p.price === price);
+        if (!exists) {
+          products.push({
+            store: 'lidl',
+            catalog_folder: catalogFolder,
+            page: pageName,
+            product_name: title,
+            price: price,
+            original_price: originalPrice || 0,
+            discount_percent: discountPercent,
+            offer_type: offerType,
+            raw_text: candidates.map(c => c.text).join(' | ')
+          });
+        }
       }
     }
   }
