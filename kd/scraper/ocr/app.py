@@ -1,13 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 import os
 import traceback
 
 app = FastAPI()
 
-# Указываем путь к установленному Tesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class ImageRequest(BaseModel):
@@ -18,12 +17,21 @@ async def process_image(req: ImageRequest):
     norm_path = os.path.abspath(req.image_path)
     
     if not os.path.exists(norm_path):
-        raise HTTPException(status_status=404, detail=f"Файл не найден: {norm_path}")
+        raise HTTPException(status_code=404, detail=f"Файл не найден: {norm_path}")
     
     try:
-        image = Image.open(norm_path)
-        # Запускаем распознавание на финском и английском языках
-        data = pytesseract.image_to_data(image, lang='fin', output_type=pytesseract.Output.DICT)
+        image = Image.open(norm_path).convert('L') # Переводим в черно-белый формат для лучшего контраста
+        
+        # 1. Увеличиваем изображение в 2 раза (Upscaling), чтобы мелкий шрифт стал четче для Tesseract
+        width, height = image.size
+        image = image.resize((width * 2, height * 2), Image.Resampling.LANCZOS)
+        
+        # 2. Повышаем контрастность текста
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(2.0)
+        
+        # Запускаем распознавание с финским и английским языками
+        data = pytesseract.image_to_data(image, lang='fin+eng', output_type=pytesseract.Output.DICT)
         
         text_blocks = []
         n_boxes = len(data['text'])
@@ -33,10 +41,12 @@ async def process_image(req: ImageRequest):
             conf = int(data['conf'][i])
             
             if word and conf > 15:
-                x = data['left'][i]
-                y = data['top'][i]
-                w = data['width'][i]
-                h = data['height'][i]
+                # Так как мы увеличили картинку в 2 раза, делим координаты обратно на 2, 
+                # чтобы координаты прямоугольников (bbox) совпали с оригинальным размером страницы
+                x = data['left'][i] // 2
+                y = data['top'][i] // 2
+                w = data['width'][i] // 2
+                h = data['height'][i] // 2
                 
                 bbox = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
                 
