@@ -1,18 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import easyocr
-import torch
+import pytesseract
+from PIL import Image
 import os
 import traceback
 
 app = FastAPI()
 
-# Проверяем доступность CUDA
-use_gpu = torch.cuda.is_available()
-print(f"CUDA доступна: {use_gpu}")
-
-# Инициализируем EasyOCR
-reader = easyocr.Reader(['en', 'la'], gpu=use_gpu)
+# Указываем путь к установленному Tesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class ImageRequest(BaseModel):
     image_path: str
@@ -22,35 +18,39 @@ async def process_image(req: ImageRequest):
     norm_path = os.path.abspath(req.image_path)
     
     if not os.path.exists(norm_path):
-        print(f"[ERROR] Файл не найден по пути: {norm_path}")
-        raise HTTPException(status_code=404, detail=f"Файл не найден: {norm_path}")
+        raise HTTPException(status_status=404, detail=f"Файл не найден: {norm_path}")
     
     try:
-        print(f"[OCR] Обработка файла: {norm_path}")
-        raw_results = reader.readtext(norm_path)
+        image = Image.open(norm_path)
+        # Запускаем распознавание на финском и английском языках
+        data = pytesseract.image_to_data(image, lang='fin+eng', output_type=pytesseract.Output.DICT)
         
         text_blocks = []
-        for item in raw_results:
-            bbox, text, prob = item
+        n_boxes = len(data['text'])
+        
+        for i in range(n_boxes):
+            word = data['text'][i].strip()
+            conf = int(data['conf'][i])
             
-            # Превращаем numpy-числа из bbox в обычные python int, 
-            # чтобы FastAPI мог спокойно упаковать их в JSON
-            clean_bbox = [
-                [int(point[0]), int(point[1])] for point in bbox
-            ]
-            
-            text_blocks.append({
-                "bbox": clean_bbox,
-                "text": text,
-                "confidence": float(prob)
-            })
+            if word and conf > 15:
+                x = data['left'][i]
+                y = data['top'][i]
+                w = data['width'][i]
+                h = data['height'][i]
+                
+                bbox = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+                
+                text_blocks.append({
+                    "bbox": bbox,
+                    "text": word,
+                    "confidence": float(conf / 100.0)
+                })
             
         return {
             "success": True,
             "text_blocks": text_blocks
         }
     except Exception as e:
-        print(f"[CRITICAL ERROR] Ошибка при обработке EasyOCR:")
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
