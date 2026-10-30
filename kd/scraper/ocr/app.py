@@ -23,7 +23,7 @@ async def process_image(req: ImageRequest):
     try:
         image = Image.open(norm_path)
         # Запускаем распознавание на финском и английском языках
-        data = pytesseract.image_to_data(image, lang='fin+eng', output_type=pytesseract.Output.DICT)
+        data = pytesseract.image_to_data(image, lang='fin', output_type=pytesseract.Output.DICT)
         
         text_blocks = []
         n_boxes = len(data['text'])
