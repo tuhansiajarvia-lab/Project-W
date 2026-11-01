@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lidl Tarjoukset / Lidl Offers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <h1>Lidl <span> Tarjoukset</span></h1>
+      <div class="lang-picker">
+        <button onclick="setLanguage('fi')" id="lang-fi" class="active">FI</button>
+        <button onclick="setLanguage('en')" id="lang-en">EN</button>
+        <button onclick="setLanguage('ru')" id="lang-ru">RU</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="controls">
+      <input type="text" id="searchInput" class="search-input" placeholder="Etsi tuotetta..." oninput="handleSearch()">
+      <select id="categorySelect" class="category-select" onchange="handleCategoryChange()">
+        <option value="all">Kaikki kategoriat</option>
+      </select>
+    </div>
+
+    <div id="product-grid" class="product-grid"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
