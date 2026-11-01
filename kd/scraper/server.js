@@ -60,7 +60,7 @@ app.get('/api/products', (req, res) => {
     if (search) {
       query += ` AND (name_${lang} LIKE ? OR product_name LIKE ?)`;
       params.push(`%${search}%`, `%${search}%`);
-
+    };
     query += ' ORDER BY id DESC';
 
     const stmt = db.prepare(query);
