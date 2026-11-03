@@ -56,7 +56,7 @@ app.get('/api/products', (req, res) => {
       FROM products 
       WHERE 1=1
     `;
-    const params = [];
+    const params = [];  
 
     // Поиск по названию или сырому тексту
     if (search) {
