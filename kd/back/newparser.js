@@ -1,120 +1,151 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
 import fs from 'fs';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 
-const db = new Database('../db/products.db');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Инициализация базы данных (в папке db в корне проекта)
+const db = new Database(path.join(__dirname, '../db/products.db'));
+
+// Создаем таблицу для продуктов, если её еще нет
+db.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        price REAL,
+        unit TEXT,
+        discount TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+
+// Подготавливаем SQL-запрос для быстрой вставки (Prepared Statement)
+const insertStmt = db.prepare(`
+    INSERT INTO products (name, price, unit, discount) 
+    VALUES (@name, @price, @unit, @discount)
+`);
+
+// Подключаемся к локальной Ollama
 const deepseek = new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: 'https://api.deepseek.com'
+    baseURL: 'http://localhost:11434/v1',
+    apiKey: 'ollama'
 });
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Функция рекурсивного поиска PNG
+function getPngFiles(dirPath) {
+    let results = [];
+    if (!fs.existsSync(dirPath)) return results;
+    
+    const list = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const file of list) {
+        const fullPath = path.join(dirPath, file.name);
+        if (file.isDirectory()) {
+            results = results.concat(getPngFiles(fullPath));
+        } else if (file.name.toLowerCase().endsWith('.png')) {
+            results.push(fullPath);
+        }
+    }
+    return results;
+}
 
-async function parseCatalogPage(imagePath) {
-    const imageBuffer = fs.readFileSync(imagePath);
+// Функция парсинга страницы и сохранения в SQLite
+async function parsePageAndSale(filePath) {
+    console.log(`Чтение файла картинки: ${filePath}`);
+    const imageBuffer = fs.readFileSync(filePath);
     const base64Image = imageBuffer.toString('base64');
 
     const prompt = `
-    Ты профессиональный парсер рекламных каталогов Lidl Финляндия. 
-    Проанализируй изображение страницы каталога и верни JSON-объект с массивом товаров в ключе "products".
-    Для каждого товара укажи следующие поля:
-    - product_name (строка, исходный текст с картинки на финском/шведском)
-    - price (число, текущая цена в евро, если есть, иначе null)
-    - unit (строка, единица измерения, например: kg, kpl, l, pkt)
-    - discount_percent (строка или число, размер скидки если есть)
-    - original_price (число, старая цена до скидки, если есть)
-    - name_fi, name_en, name_ru (переведенные и очищенные названия на финском, английском и русском)
-    - category_fi, category_en, category_ru (категории товара на трех языках)
-
-    Ответ верни строго в формате JSON без лишнего текста и Markdown-разметки.
+    Extract products from this supermarket catalog page into a JSON object with a key "products" containing an array of items.
+    Each item must have:
+    - "name": string (product name in Finnish)
+    - "price": number (regular price)
+    - "unit": string (unit like kg, kpl, l, etc.)
+    - "discount": string or null (e.g. "-14%" or null)
     `;
 
-    try {
-        const response = await deepseek.chat.completions.create({
-            model: "deepseek-chat",
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: prompt },
-                        { 
-                            type: "image_url", 
-                            image_url: { url: `data:image/png;base64,${base64Image}` } 
+    const response = await deepseek.chat.completions.create({
+        model: "minicpm-v",
+        messages: [
+            {
+                role: "system",
+                content: "You are a precise OCR and data extraction assistant that outputs strictly in JSON format."
+            },
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: prompt },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/png;base64,${base64Image}`
                         }
-                    ]
-                }
-            ],
-            response_format: { type: "json_object" }
-        });
+                    }
+                ]
+            }
+        ],
+        response_format: { type: "json_object" }
+    });
 
-        const result = JSON.parse(response.choices[0].message.content);
-        return result.products || [];
-    } catch (error) {
-        console.error(`Ошибка при обработке страницы ${imagePath}:`, error);
-        return [];
+    const content = response.choices[0].message.content;
+    console.log("Ответ от модели:\n", content);
+
+    try {
+        const parsedData = JSON.parse(content);
+        const products = parsedData.products || [];
+
+        if (products.length > 0) {
+            // Используем транзакцию для быстрой и безопасной записи пачки товаров
+            const insertMany = db.transaction((items) => {
+                for (const item of items) {
+                    insertStmt.run({
+                        name: item.name || 'Unknown',
+                        price: typeof item.price === 'number' ? item.price : 0,
+                        unit: item.unit || '',
+                        discount: item.discount || null
+                    });
+                }
+            });
+
+            insertMany(products);
+            console.log(`Успешно сохранено товаров в БД: ${products.length}`);
+        } else {
+            console.log("На странице не найдено товаров для сохранения.");
+        }
+    } catch (e) {
+        console.error("Ошибка при парсинге JSON или записи в БД:", e.message);
     }
 }
 
-async function processAllPages(imagesDir) {
-    const files = fs.readdirSync(imagesDir).filter(file => file.endsWith('.png'));
-    
+// Главная функция обхода каталогов
+async function processAllPages(dir) {
+    const files = getPngFiles(dir);
     console.log(`Найдено страниц для обработки: ${files.length}`);
-
-    // Подготовка таблицы в SQLite, если её еще нет
-    db.prepare(`
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT,
-            price REAL,
-            unit TEXT,
-            discount_percent TEXT,
-            original_price REAL,
-            name_fi TEXT,
-            name_en TEXT,
-            name_ru TEXT,
-            category_fi TEXT,
-            category_en TEXT,
-            category_ru TEXT
-        )
-    `).run();
-
-    const insertStmt = db.prepare(`
-        INSERT INTO products (product_name, price, unit, discount_percent, original_price, name_fi, name_en, name_ru, category_fi, category_en, category_ru)
-        VALUES (@product_name, @price, @unit, @discount_percent, @original_price, @name_fi, @name_en, @name_ru, @category_fi, @category_en, @category_ru)
-    `);
+    
+    if (files.length === 0) {
+        console.log("Не найдено ни одной картинки для парсинга.");
+        return;
+    }
 
     for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const filePath = path.join(imagesDir, file);
-        console.log(`Обработка страницы [${i + 1}/${files.length}]: ${file}...`);
-
-        const products = await parseCatalogPage(filePath);
+        const filePath = files[i];
+        console.log(`\n--- Обработка файла [${i + 1}/${files.length}]: ${filePath} ---`);
         
-        // Сохранение товаров в базу данных в рамках транзакции
-        const insertMany = db.transaction((items) => {
-            for (const item of items) insertStmt.run(item);
-        });
-        insertMany(products);
+        try {
+            await parsePageAndSale(filePath);
+        } catch (error) {
+            console.error(`Ошибка при обработке файла ${filePath}:`, error.message);
+        }
 
-        console.log(`Страница ${file} обработана. Найдено товаров: ${products.length}`);
-
-        // Если это не последняя страница, делаем паузу 15 секунд
         if (i < files.length - 1) {
-            console.log(`Пауза 10 секунд перед следующей страницей...`);
-            await sleep(10000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
-
-    console.log('Парсинг всего каталога успешно завершен!');
+    
+    console.log('Парсинг всего каталога и сохранение в БД успешно завершены!');
 }
 
-// Запуск функции по папке с картинками (например, скачанными через dloader.js)
+// Запуск обхода каталогов Lidl
 processAllPages('../catalogs/lidl');
