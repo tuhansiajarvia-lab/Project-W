@@ -117,4 +117,4 @@ async function processAllPages(imagesDir) {
 }
 
 // Запуск функции по папке с картинками (например, скачанными через dloader.js)
-processAllPages('./catalogs');
+processAllPages('../catalogs/lidl');
