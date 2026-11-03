@@ -1,9 +1,15 @@
-import fs from 'fs';
+import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+import fs from 'fs';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 
-const db = new Database('db/products.db');
+const db = new Database('../db/products.db');
 
 const deepseek = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
