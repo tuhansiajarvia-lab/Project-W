@@ -10,6 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Инициализация базы данных (в папке db в корне проекта)
 const db = new Database(path.join(__dirname, '../db/products.db'));
 
+// На время разработки удаляем старую таблицу, чтобы структура точно соответствовала
+db.exec(`DROP TABLE IF EXISTS products`);
+
 // Создаем таблицу для продуктов, если её еще нет
 db.exec(`
     CREATE TABLE IF NOT EXISTS products (
