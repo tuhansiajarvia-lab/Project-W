@@ -7,13 +7,19 @@ import Database from 'better-sqlite3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Инициализация базы данных (в папке db в корне проекта)
-const db = new Database(path.join(__dirname, '../db/products.db'));
+// Убедимся, что папка db существует (создаем автоматически, если нет)
+const dbDir = path.join(__dirname, '../db');
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+
+// Инициализация базы данных
+const db = new Database(path.join(dbDir, 'products.db'));
 
 // На время разработки удаляем старую таблицу, чтобы структура точно соответствовала
 db.exec(`DROP TABLE IF EXISTS products`);
 
-// Создаем таблицу для продуктов, если её еще нет
+// Создаем таблицу для продуктов
 db.exec(`
     CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,13 +27,16 @@ db.exec(`
         price REAL,
         unit TEXT,
         discount TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, price)
     )
 `);
 
+
+
 // Подготавливаем SQL-запрос для быстрой вставки (Prepared Statement)
 const insertStmt = db.prepare(`
-    INSERT INTO products (name, price, unit, discount) 
+    INSERT OR REPLACE INTO products (name, price, unit, discount) 
     VALUES (@name, @price, @unit, @discount)
 `);
 
