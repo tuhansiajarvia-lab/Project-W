@@ -137,7 +137,7 @@ function applyFilters() {
     const matchesStore = state.selectedStores.includes(p.store);
     const matchesHighDiscount = !state.highDiscountOnly || p.discount_percent >= 30;
 
-    return matchesSearch && matchesCat && matchesStore && matchesClub && matchesHighDiscount;
+    return matchesSearch && matchesCat && matchesStore && matchesHighDiscount;
   });
 
   filtered.sort((a, b) => {
