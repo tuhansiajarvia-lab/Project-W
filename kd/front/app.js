@@ -5,11 +5,11 @@ const DEMO_PRODUCTS = [
     name: "Omena Honey Crunch",
     brand: "Kotimainen",
     size: "1kg",
-    price: 1.29,
+    price: 1.89,
     original_price: 2.19,
     discount_percent: 41,
     store: "lidl",
-    category: "kasvikset",
+    category: "Hedelmät",
     valid_until: "Su 8.11.",
     is_club: false,
     image: "images/apple.png"
@@ -83,6 +83,34 @@ const DEMO_PRODUCTS = [
     valid_until: "Su 8.11.",
     is_club: false,
     image: "images/milk.png"
+  },
+  {
+    id: 7,
+    name: "Oululainen Reissumies ruisleipä",
+    brand: "Oululainen",
+    size: "4 kpl / 230g",
+    price: 1.15,
+    original_price: 1.65,
+    discount_percent: 30,
+    store: "k-market",
+    category: "Leivät",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "images/bread.jpg"
+  },
+  {
+    id: 8,
+    name: "Banaani irtomyynti",
+    brand: "Dole / Luomu",
+    size: "1kg",
+    price: 1.39,
+    original_price: 1.99,
+    discount_percent: 30,
+    store: "lidl",
+    category: "Hedelmät",
+    valid_until: "Ma 9.11.",
+    is_club: true,
+    image: "images/banana.png"
   }
 ];
 
