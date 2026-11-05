@@ -1,50 +1,8 @@
-// Демонстрационные данные товаров
+// Демонстрационные данные товаров с точными финскими названиями и вашими иконками
 const DEMO_PRODUCTS = [
   {
     id: 1,
-    name: "Jauheliha Naudan 10%",
-    brand: "Atria",
-    size: "400g (8.72 €/kg)",
-    price: 3.49,
-    original_price: 4.99,
-    discount_percent: 30,
-    store: "lidl",
-    category: "liha",
-    valid_until: "Su 8.11.",
-    is_club: false,
-    image: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=300&auto=format&fit=crop&q=80"
-  },
-  {
-    id: 2,
-    name: "Juhla Mokka Kahvi",
-    brand: "Paulig",
-    size: "500g (7.98 €/kg)",
-    price: 3.99,
-    original_price: 6.29,
-    discount_percent: 36,
-    store: "k-market",
-    category: "juomat",
-    valid_until: "To 5.11.",
-    is_club: true,
-    image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300&auto=format&fit=crop&q=80"
-  },
-  {
-    id: 3,
-    name: "Kirjolohifilee A-luokka",
-    brand: "Kalaneuvos",
-    size: "n. 1kg (9.90 €/kg)",
-    price: 9.90,
-    original_price: 14.90,
-    discount_percent: 33,
-    store: "s-market",
-    category: "liha",
-    valid_until: "La 7.11.",
-    is_club: false,
-    image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=300&auto=format&fit=crop&q=80"
-  },
-  {
-    id: 4,
-    name: "Omena Royal Gala",
+    name: "Omena Honey Crunch",
     brand: "Kotimainen",
     size: "1kg",
     price: 1.29,
@@ -54,27 +12,55 @@ const DEMO_PRODUCTS = [
     category: "kasvikset",
     valid_until: "Su 8.11.",
     is_club: false,
-    image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&auto=format&fit=crop&q=80"
+    image: "Näyttökuva 2026-11-05 180956.png" // Ссылка на вашу иконку яблока
+  },
+  {
+    id: 2,
+    name: "Paulig Juhla Mokka kahvi kahvipapu",
+    brand: "Paulig",
+    size: "500g (7.98 €/kg)",
+    price: 3.99,
+    original_price: 6.29,
+    discount_percent: 36,
+    store: "k-market",
+    category: "juomat",
+    valid_until: "To 5.11.",
+    is_club: true,
+    image: "Näyttökuva 2026-11-05 180607.png" // Иконка кофе
+  },
+  {
+    id: 3,
+    name: "Coop Ruodoton lohifilee pakaste",
+    brand: "Coop",
+    size: "n. 1kg (9.90 €/kg)",
+    price: 9.90,
+    original_price: 14.90,
+    discount_percent: 33,
+    store: "s-market",
+    category: "liha",
+    valid_until: "La 7.11.",
+    is_club: false,
+    image: "Näyttökuva 2026-11-05 180636.png" // Иконка лосося
+  },
+  {
+    id: 4,
+    name: "Atria Nauta-Viljapossu Jauheliha",
+    brand: "Atria",
+    size: "250g (13.96 €/kg)",
+    price: 3.49,
+    original_price: 4.99,
+    discount_percent: 30,
+    store: "lidl",
+    category: "liha",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "Näyttökuva 2026-11-05 181409.png" // Иконка фарша
   },
   {
     id: 5,
-    name: "Kaurajuoma Barista",
-    brand: "Oatly",
-    size: "1L",
-    price: 1.79,
-    original_price: 2.29,
-    discount_percent: 21,
-    store: "k-market",
-    category: "maito",
-    valid_until: "Su 8.11.",
-    is_club: false,
-    image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300&auto=format&fit=crop&q=80"
-  },
-  {
-    id: 6,
-    name: "Kermajuusto 17%",
-    brand: "Oltermanni",
-    size: "900g (6.65 €/kg)",
+    name: "Arla kermajuusto 17%",
+    brand: "Arla",
+    size: "1 kg",
     price: 5.99,
     original_price: 7.89,
     discount_percent: 24,
@@ -82,7 +68,21 @@ const DEMO_PRODUCTS = [
     category: "maito",
     valid_until: "Pe 6.11.",
     is_club: true,
-    image: "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=300&auto=format&fit=crop&q=80"
+    image: "Näyttökuva 2026-11-05 182838.png" // Иконка сыра
+  },
+  {
+    id: 6,
+    name: "Kotimaista rasvaton maito",
+    brand: "Kotimaista",
+    size: "1l",
+    price: 1.79,
+    original_price: 2.29,
+    discount_percent: 21,
+    store: "k-market",
+    category: "maito",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "Näyttökuva 2026-11-05 180656.png" // Иконка молока
   }
 ];
 
@@ -153,7 +153,7 @@ function applyFilters() {
   renderProducts(filtered);
 }
 
-// Рендеринг карточек
+// Рендеринг карточек точно по вашему образцу
 function renderProducts(items) {
   resultsCount.textContent = `${items.length} tuotetta löytynyt`;
 
@@ -187,7 +187,7 @@ function renderProducts(items) {
             <span class="old-price">${p.original_price.toFixed(2)} €</span>
           </div>
 
-          <div class="card-footer" style="justify-content: flex-start;">
+          <div class="card-footer">
             <span>Voimassa: ${p.valid_until}</span>
           </div>
         </div>
