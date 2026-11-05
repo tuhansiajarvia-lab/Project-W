@@ -3,33 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lidl Tarjoukset / Lidl Offers</title>
+  <title>V-ALET — Supermarket Catalog Aggregator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <header>
-    <div class="header-content">
-      <h1>Lidl <span> Tarjoukset</span></h1>
-      <div class="lang-picker">
-        <button onclick="setLanguage('fi')" id="lang-fi" class="active">FI</button>
-        <button onclick="setLanguage('en')" id="lang-en">EN</button>
-        <button onclick="setLanguage('ru')" id="lang-ru">RU</button>
+  <!-- Шапка сайта -->
+  <header class="header">
+    <div class="header-container">
+      <div class="logo-area">
+        <a href="#" class="logo">V-ALET</a>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Переключатель языков (пока в виде кнопок) -->
+        <div class="lang-picker">
+          <button class="lang-btn active" onclick="switchLang('fi')">FI</button>
+          <button class="lang-btn" onclick="switchLang('en')">EN</button>
+          <button class="lang-btn" onclick="switchLang('ru')">RU</button>
+        </div>
+
+        <!-- Кнопка входа -->
+        <button class="btn-login" id="openAuthModal">Kirjaudu</button>
       </div>
     </div>
   </header>
 
-  <main>
-    <div class="controls">
-      <input type="text" id="searchInput" class="search-input" placeholder="Etsi tuotetta..." oninput="handleSearch()">
-      <select id="categorySelect" class="category-select" onchange="handleCategoryChange()">
-        <option value="all">Kaikki kategoriat</option>
-      </select>
-    </div>
+  <!-- Основной контент -->
+  <main class="main-content">
+    
+    <!-- Секция поиска -->
+    <section class="hero-section">
+      <h1>Löydä parhaat tarjoukset / Найдите лучшие скидки</h1>
+      <div class="search-box-wrapper">
+        <input 
+          type="text" 
+          id="mainSearchInput" 
+          class="main-search-input" 
+          placeholder="esim. jauheliha..."
+          autocomplete="off"
+        >
+        <button class="search-btn" id="searchSubmitBtn">🔍</button>
+      </div>
+    </section>
 
-    <div id="product-grid" class="product-grid"></div>
+    <!-- 6 значков товаров со скидками (плейсхолдеры) -->
+    <section class="featured-deals-section">
+      <h2>Päivän parhaat tarjoukset / Топ скидки дня</h2>
+      <div class="deals-badges-grid">
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 1</span>
+        </div>
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 2</span>
+        </div>
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 3</span>
+        </div>
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 4</span>
+        </div>
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 5</span>
+        </div>
+        <div class="deal-badge-card">
+          <div class="badge-placeholder-img">🏷️</div>
+          <span>Tarjous 6</span>
+        </div>
+      </div>
+    </section>
+
   </main>
 
-  <script src="app.js"></script>
+  <!-- Подвал сайта -->
+  <footer class="footer">
+    <div class="footer-container">
+      <p>&copy; 2026 V-ALET. Kaikki oikeudet pidätetään.</p>
+    </div>
+  </footer>
+
+  <!-- Модальное окно авторизации/регистрации -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card">
+      <button class="modal-close" id="closeAuthModal">&times;</button>
+      
+      <!-- Вкладки переключения -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-target="loginTab">Kirjaudu sisään</button>
+        <button class="tab-btn" data-target="registerTab">Rekisteröidy</button>
+      </div>
+
+      <!-- Вкладка входа -->
+      <div class="tab-pane active" id="loginTab">
+        <form class="auth-form" onsubmit="event.preventDefault();">
+          <input type="email" placeholder="Sähköposti / Email" required>
+          <input type="password" placeholder="Salasana / Password" required>
+          <button type="submit" class="btn-submit">Kirjaudu</button>
+        </form>
+      </div>
+
+      <!-- Вкладка регистрации -->
+      <div class="tab-pane" id="registerTab">
+        <form class="auth-form" onsubmit="event.preventDefault();">
+          <input type="email" placeholder="Sähköposti / Email" required>
+          <input type="password" placeholder="Salasana / Password" required>
+          <input type="password" placeholder="Vahvista salasana / Confirm password" required>
+          <button type="submit" class="btn-submit">Luo tili</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Базовый скрипт для модального окна и кнопок -->
+  <script>
+    // Логика модального окна
+    const modal = document.getElementById('authModal');
+    const openBtn = document.getElementById('openAuthModal');
+    const closeBtn = document.getElementById('closeAuthModal');
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+
+    openBtn.addEventListener('click', () => {
+      modal.classList.add('open');
+    });
+
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('open');
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('open');
+      }
+    });
+
+    // Переключение вкладок (Вход / Регистрация)
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabPanes.forEach(p => p.classList.remove('active'));
+
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).classList.add('active');
+      });
+    });
+
+    // Заглушка для переключения языка
+    function switchLang(lang) {
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      console.log('Language switched to:', lang);
+    }
+  </script>
 </body>
 </html>
