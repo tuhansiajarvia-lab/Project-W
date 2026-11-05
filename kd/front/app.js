@@ -92,7 +92,6 @@ const state = {
   searchQuery: '',
   selectedCategory: 'all',
   selectedStores: ['lidl', 'k-market', 's-market'],
-  clubOnly: false,
   highDiscountOnly: false,
   sortBy: 'discount'
 };
@@ -136,7 +135,6 @@ function applyFilters() {
                           p.brand.toLowerCase().includes(state.searchQuery.toLowerCase());
     const matchesCat = state.selectedCategory === 'all' || p.category === state.selectedCategory;
     const matchesStore = state.selectedStores.includes(p.store);
-    const matchesClub = !state.clubOnly || p.is_club;
     const matchesHighDiscount = !state.highDiscountOnly || p.discount_percent >= 30;
 
     return matchesSearch && matchesCat && matchesStore && matchesClub && matchesHighDiscount;
@@ -220,11 +218,6 @@ function setupEventListeners() {
     });
   });
 
-  document.getElementById('filterClub').addEventListener('change', (e) => {
-    state.clubOnly = e.target.checked;
-    applyFilters();
-  });
-
   document.getElementById('filterHighDiscount').addEventListener('change', (e) => {
     state.highDiscountOnly = e.target.checked;
     applyFilters();
@@ -243,7 +236,6 @@ function setupEventListeners() {
 
   document.getElementById('resetFiltersBtn').addEventListener('click', () => {
     document.querySelectorAll('.filter-store').forEach(c => c.checked = true);
-    document.getElementById('filterClub').checked = false;
     document.getElementById('filterHighDiscount').checked = false;
     state.selectedStores = ['lidl', 'k-market', 's-market'];
     state.clubOnly = false;
