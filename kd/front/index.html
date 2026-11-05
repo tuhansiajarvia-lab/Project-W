@@ -3,162 +3,184 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>V-ALET — Supermarket Catalog Aggregator</title>
+  <title>V-ALET — Löydä parhaat tarjoukset</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Шапка сайта -->
+  <!-- Хедер -->
   <header class="header">
     <div class="header-container">
-      <div class="logo-area">
+      <div class="header-left">
         <a href="#" class="logo">V-ALET</a>
+        <div class="location-picker">
+          <span class="icon">📍</span>
+          <select id="citySelect">
+            <option value="helsinki">Helsinki</option>
+            <option value="espoo">Espoo</option>
+            <option value="tampere">Tampere</option>
+            <option value="kuopio" selected>Kuopio</option>
+          </select>
+        </div>
       </div>
       
       <div class="header-actions">
-        <!-- Переключатель языков (пока в виде кнопок) -->
+        <button class="icon-btn" aria-label="Favorites" id="favBtn">
+          ❤️ <span class="badge-count" id="favCount">0</span>
+        </button>
         <div class="lang-picker">
-          <button class="lang-btn active" onclick="switchLang('fi')">FI</button>
-          <button class="lang-btn" onclick="switchLang('en')">EN</button>
-          <button class="lang-btn" onclick="switchLang('ru')">RU</button>
+          <button class="lang-btn active">FI</button>
+          <button class="lang-btn">EN</button>
+          <button class="lang-btn">RU</button>
         </div>
-
-        <!-- Кнопка входа -->
         <button class="btn-login" id="openAuthModal">Kirjaudu</button>
       </div>
     </div>
   </header>
 
-  <!-- Основной контент -->
-  <main class="main-content">
-    
-    <!-- Секция поиска -->
-    <section class="hero-section">
-      <h1>Löydä parhaat tarjoukset / Найдите лучшие скидки</h1>
-      <div class="search-box-wrapper">
+  <!-- Компактная поисковая секция -->
+  <section class="hero-search-section">
+    <div class="search-container">
+      <h1>Löydä halvimmat tarjoukset läheltäsi</h1>
+      <p class="subtitle">Vertaile ruokakauppojen hintoja ja säästä joka viikko</p>
+      
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
         <input 
           type="text" 
-          id="mainSearchInput" 
-          class="main-search-input" 
-          placeholder="esim. jauheliha..."
+          id="searchInput" 
+          placeholder="Etsi tuotetta (esim. jauheliha, kahvi, lohi)..."
           autocomplete="off"
         >
-        <button class="search-btn" id="searchSubmitBtn">🔍</button>
+        <button class="btn-search" id="searchBtn">Etsi</button>
       </div>
-    </section>
 
-    <!-- 6 значков товаров со скидками (плейсхолдеры) -->
-    <section class="featured-deals-section">
-      <h2>Päivän parhaat tarjoukset / Топ скидки дня</h2>
-      <div class="deals-badges-grid">
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 1</span>
-        </div>
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 2</span>
-        </div>
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 3</span>
-        </div>
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 4</span>
-        </div>
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 5</span>
-        </div>
-        <div class="deal-badge-card">
-          <div class="badge-placeholder-img">🏷️</div>
-          <span>Tarjous 6</span>
+      <!-- Быстрые категории -->
+      <div class="quick-categories">
+        <span class="quick-label">Suositut:</span>
+        <button class="chip active" data-cat="all">Kaikki</button>
+        <button class="chip" data-cat="liha">🥩 Liha & Kala</button>
+        <button class="chip" data-cat="maito">🥛 Maitotuotteet</button>
+        <button class="chip" data-cat="kasvikset">🥬 Kasvikset</button>
+        <button class="chip" data-cat="juomat">☕ Juomat</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Каталог товаров с фильтрами -->
+  <main class="catalog-main">
+    
+    <!-- Панель управления каталогом -->
+    <div class="catalog-header">
+      <div class="results-info">
+        <h2 id="catalogTitle">Ajankohtaiset tarjoukset</h2>
+        <span class="results-count" id="resultsCount">Ladataan...</span>
+      </div>
+
+      <div class="catalog-controls">
+        <button class="btn-filter-toggle" id="toggleMobileFilters">
+          ⚙️ Suodattimet
+        </button>
+        <div class="sort-wrapper">
+          <label for="sortSelect">Järjestä:</label>
+          <select id="sortSelect">
+            <option value="discount">Suurin alennus (%)</option>
+            <option value="price-asc">Hinta: Halvin ensin</option>
+            <option value="price-desc">Hinta: Kallein ensin</option>
+            <option value="name">Nimi (A-Ö)</option>
+          </select>
         </div>
       </div>
-    </section>
+    </div>
 
+    <div class="catalog-layout">
+      <!-- Сайдбар фильтров -->
+      <aside class="filters-sidebar" id="filtersSidebar">
+        <div class="filter-group">
+          <h3>Kaupat</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" value="lidl" checked class="filter-store"> Lidl
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="k-market" checked class="filter-store"> K-Citymarket
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="s-market" checked class="filter-store"> S-Market
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <h3>Tarjoustyyppi</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="filterClub"> Vain kanta-asiakastarjoukset
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="filterHighDiscount"> Alennus vähintään -30%
+          </label>
+        </div>
+
+        <button class="btn-reset-filters" id="resetFiltersBtn">Tyhjennä suodattimet</button>
+      </aside>
+
+      <!-- Сетка товаров -->
+      <section class="products-grid-wrapper">
+        <div class="products-grid" id="productGrid">
+          <!-- Карточки рендерятся через app.js -->
+        </div>
+
+        <!-- Пустое состояние -->
+        <div class="empty-state hidden" id="emptyState">
+          <div class="empty-icon">🔍</div>
+          <h3>Tuotteita ei löytynyt</h3>
+          <p>Kokeile eri hakusanaa tai nollaa valitut suodattimet.</p>
+          <button class="btn-secondary" id="resetSearchBtn">Nollaa haku</button>
+        </div>
+      </section>
+    </div>
   </main>
 
-  <!-- Подвал сайта -->
+  <!-- Футер -->
   <footer class="footer">
     <div class="footer-container">
-      <p>&copy; 2026 V-ALET. Kaikki oikeudet pidätetään.</p>
+      <div class="footer-col">
+        <strong>V-ALET</strong>
+        <p>Suomen helppokäyttöisin tarjousaggregaattori.</p>
+      </div>
+      <div class="footer-col">
+        <span>&copy; 2026 V-ALET. Kaikki oikeudet pidätetään.</span>
+      </div>
     </div>
   </footer>
 
-  <!-- Модальное окно авторизации/регистрации -->
+  <!-- Модальное окно авторизации -->
   <div class="modal-overlay" id="authModal">
     <div class="modal-card">
       <button class="modal-close" id="closeAuthModal">&times;</button>
-      
-      <!-- Вкладки переключения -->
       <div class="modal-tabs">
         <button class="tab-btn active" data-target="loginTab">Kirjaudu sisään</button>
         <button class="tab-btn" data-target="registerTab">Rekisteröidy</button>
       </div>
-
-      <!-- Вкладка входа -->
       <div class="tab-pane active" id="loginTab">
         <form class="auth-form" onsubmit="event.preventDefault();">
-          <input type="email" placeholder="Sähköposti / Email" required>
-          <input type="password" placeholder="Salasana / Password" required>
-          <button type="submit" class="btn-submit">Kirjaudu</button>
+          <label>Sähköposti</label>
+          <input type="email" placeholder="nimi@esimerkki.fi" required>
+          <label>Salasana</label>
+          <input type="password" placeholder="••••••••" required>
+          <button type="submit" class="btn-primary">Kirjaudu</button>
         </form>
       </div>
-
-      <!-- Вкладка регистрации -->
       <div class="tab-pane" id="registerTab">
         <form class="auth-form" onsubmit="event.preventDefault();">
-          <input type="email" placeholder="Sähköposti / Email" required>
-          <input type="password" placeholder="Salasana / Password" required>
-          <input type="password" placeholder="Vahvista salasana / Confirm password" required>
-          <button type="submit" class="btn-submit">Luo tili</button>
+          <label>Sähköposti</label>
+          <input type="email" placeholder="nimi@esimerkki.fi" required>
+          <label>Salasana</label>
+          <input type="password" placeholder="••••••••" required>
+          <button type="submit" class="btn-primary">Luo tili</button>
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Базовый скрипт для модального окна и кнопок -->
-  <script>
-    // Логика модального окна
-    const modal = document.getElementById('authModal');
-    const openBtn = document.getElementById('openAuthModal');
-    const closeBtn = document.getElementById('closeAuthModal');
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-
-    openBtn.addEventListener('click', () => {
-      modal.classList.add('open');
-    });
-
-    closeBtn.addEventListener('click', () => {
-      modal.classList.remove('open');
-    });
-
-    window.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.classList.remove('open');
-      }
-    });
-
-    // Переключение вкладок (Вход / Регистрация)
-    tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        tabBtns.forEach(b => b.classList.remove('active'));
-        tabPanes.forEach(p => p.classList.remove('active'));
-
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.target).classList.add('active');
-      });
-    });
-
-    // Заглушка для переключения языка
-    function switchLang(lang) {
-      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-      console.log('Language switched to:', lang);
-    }
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>

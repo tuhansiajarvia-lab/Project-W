@@ -1,112 +1,207 @@
-// Глобальное состояние приложения
+// Демонстрационные данные товаров
+const DEMO_PRODUCTS = [
+  {
+    id: 1,
+    name: "Jauheliha Naudan 10%",
+    brand: "Atria",
+    size: "400g (8.72 €/kg)",
+    price: 3.49,
+    original_price: 4.99,
+    discount_percent: 30,
+    store: "lidl",
+    category: "liha",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=300&auto=format&fit=crop&q=80"
+  },
+  {
+    id: 2,
+    name: "Juhla Mokka Kahvi",
+    brand: "Paulig",
+    size: "500g (7.98 €/kg)",
+    price: 3.99,
+    original_price: 6.29,
+    discount_percent: 36,
+    store: "k-market",
+    category: "juomat",
+    valid_until: "To 5.11.",
+    is_club: true,
+    image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=300&auto=format&fit=crop&q=80"
+  },
+  {
+    id: 3,
+    name: "Kirjolohifilee A-luokka",
+    brand: "Kalaneuvos",
+    size: "n. 1kg (9.90 €/kg)",
+    price: 9.90,
+    original_price: 14.90,
+    discount_percent: 33,
+    store: "s-market",
+    category: "liha",
+    valid_until: "La 7.11.",
+    is_club: false,
+    image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=300&auto=format&fit=crop&q=80"
+  },
+  {
+    id: 4,
+    name: "Omena Royal Gala",
+    brand: "Kotimainen",
+    size: "1kg",
+    price: 1.29,
+    original_price: 2.19,
+    discount_percent: 41,
+    store: "lidl",
+    category: "kasvikset",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&auto=format&fit=crop&q=80"
+  },
+  {
+    id: 5,
+    name: "Kaurajuoma Barista",
+    brand: "Oatly",
+    size: "1L",
+    price: 1.79,
+    original_price: 2.29,
+    discount_percent: 21,
+    store: "k-market",
+    category: "maito",
+    valid_until: "Su 8.11.",
+    is_club: false,
+    image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300&auto=format&fit=crop&q=80"
+  },
+  {
+    id: 6,
+    name: "Kermajuusto 17%",
+    brand: "Oltermanni",
+    size: "900g (6.65 €/kg)",
+    price: 5.99,
+    original_price: 7.89,
+    discount_percent: 24,
+    store: "s-market",
+    category: "maito",
+    valid_until: "Pe 6.11.",
+    is_club: true,
+    image: "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=300&auto=format&fit=crop&q=80"
+  }
+];
+
+// Состояние UI
 const state = {
-  products: [],
-  categories: [],
-  selectedCategory: 'all',
+  products: DEMO_PRODUCTS,
+  favorites: new Set(),
   searchQuery: '',
-  currentLang: 'fi'
+  selectedCategory: 'all',
+  selectedStores: ['lidl', 'k-market', 's-market'],
+  clubOnly: false,
+  highDiscountOnly: false,
+  sortBy: 'discount'
 };
 
-// Элементы DOM
-const productGrid = document.getElementById('product-grid');
-const searchInput = document.getElementById('search-input');
-const categoryFilter = document.getElementById('category-filter');
+// DOM Элементы
+const productGrid = document.getElementById('productGrid');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const resultsCount = document.getElementById('resultsCount');
+const emptyState = document.getElementById('emptyState');
+const sortSelect = document.getElementById('sortSelect');
+const favCount = document.getElementById('favCount');
 
-// Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
 });
 
-async function initApp() {
-  await fetchCategories();
-  await fetchProducts();
+function initApp() {
+  renderSkeletons();
+  setTimeout(() => {
+    applyFilters();
+  }, 400); // Симуляция лёгкой загрузки
+
   setupEventListeners();
 }
 
-// Загрузка категорий с сервера
-async function fetchCategories() {
-  try {
-    const res = await fetch('/api/categories');
-    const data = await res.json();
-    
-    if (data.success) {
-      state.categories = data.categories;
-      renderCategoryDropdown();
-    }
-  } catch (err) {
-    console.error('Ошибка загрузки категорий:', err);
-  }
+// Отображение скелетонов при загрузке
+function renderSkeletons() {
+  productGrid.innerHTML = Array(6).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skeleton-box" style="height: 120px;"></div>
+      <div class="skeleton-box" style="height: 20px; width: 80%;"></div>
+      <div class="skeleton-box" style="height: 16px; width: 50%;"></div>
+      <div class="skeleton-box" style="height: 30px; width: 40%; margin-top: auto;"></div>
+    </div>
+  `).join('');
 }
 
-// Загрузка товаров с сервера с учетом поиска и категорий
-async function fetchProducts() {
-  try {
-    const params = new URLSearchParams();
-    if (state.searchQuery) params.append('search', state.searchQuery);
-    if (state.selectedCategory !== 'all') params.append('category', state.selectedCategory);
+// Фильтрация и сортировка
+function applyFilters() {
+  let filtered = state.products.filter(p => {
+    // Поиск
+    const matchesSearch = p.name.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
+                          p.brand.toLowerCase().includes(state.searchQuery.toLowerCase());
+    // Категория
+    const matchesCat = state.selectedCategory === 'all' || p.category === state.selectedCategory;
+    // Магазины
+    const matchesStore = state.selectedStores.includes(p.store);
+    // Клубные скидки
+    const matchesClub = !state.clubOnly || p.is_club;
+    // Высокие скидки
+    const matchesHighDiscount = !state.highDiscountOnly || p.discount_percent >= 30;
 
-    const res = await fetch(`/api/products?${params.toString()}`);
-    const data = await res.json();
+    return matchesSearch && matchesCat && matchesStore && matchesClub && matchesHighDiscount;
+  });
 
-    if (data.success) {
-      state.products = data.data;
-      renderProducts();
-    }
-  } catch (err) {
-    console.error('Ошибка загрузки товаров:', err);
-    if (productGrid) {
-      productGrid.innerHTML = `<p class="error">Не удалось загрузить товары.</p>`;
-    }
-  }
+  // Сортировка
+  filtered.sort((a, b) => {
+    if (state.sortBy === 'discount') return b.discount_percent - a.discount_percent;
+    if (state.sortBy === 'price-asc') return a.price - b.price;
+    if (state.sortBy === 'price-desc') return b.price - a.price;
+    if (state.sortBy === 'name') return a.name.localeCompare(b.name);
+    return 0;
+  });
+
+  renderProducts(filtered);
 }
 
-// Отрисовка списка категорий в <select>
-function renderCategoryDropdown() {
-  if (!categoryFilter) return;
+// Рендеринг карточек
+function renderProducts(items) {
+  resultsCount.textContent = `${items.length} tuotetta löytynyt`;
 
-  const defaultOption = `<option value="all">Все категории / каталоги</option>`;
-  const options = state.categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
-  
-  categoryFilter.innerHTML = defaultOption + options;
-}
-
-// Отрисовка карточек товаров в сетке
-function renderProducts() {
-  if (!productGrid) return;
-
-  if (state.products.length === 0) {
-    productGrid.innerHTML = `<div class="no-results">Товары не найдены</div>`;
+  if (items.length === 0) {
+    productGrid.innerHTML = '';
+    emptyState.classList.remove('hidden');
     return;
   }
 
-  productGrid.innerHTML = state.products.map(product => {
-    // Формируем плашку скидки или типа акции
-    let badgeHtml = '';
-    if (product.discount_percent) {
-      badgeHtml = `<span class="badge discount">-${product.discount_percent}%</span>`;
-    } else if (product.offer_type) {
-      badgeHtml = `<span class="badge offer">${product.offer_type}</span>`;
-    }
-
-    // Формируем отображение старой цены
-    const oldPriceHtml = product.original_price && product.original_price > 0 
-      ? `<span class="old-price">${product.original_price.toFixed(2)} €</span>` 
-      : '';
-
+  emptyState.classList.add('hidden');
+  productGrid.innerHTML = items.map(p => {
+    const isFav = state.favorites.has(p.id);
     return `
       <div class="product-card">
-        <div class="card-header">
-          <span class="store-tag">${product.store ? product.store.toUpperCase() : 'STORE'}</span>
-          ${badgeHtml}
+        <div>
+          <div class="card-top">
+            <span class="store-badge ${p.store}">${p.store}</span>
+            <span class="discount-tag">-${p.discount_percent}%</span>
+          </div>
+
+          <div class="product-img-wrapper">
+            <img src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.src='https://via.placeholder.com/150?text=Ei+kuvaa'">
+          </div>
+
+          <h3 class="product-title">${escapeHtml(p.name)}</h3>
+          <p class="product-size">${escapeHtml(p.brand)} • ${escapeHtml(p.size)}</p>
         </div>
-        <div class="card-body">
-          <h3 class="product-title">${escapeHtml(product.name || 'Без названия')}</h3>
-          <p class="catalog-info">Каталог: ${escapeHtml(product.catalog_folder)} (Стр. ${product.page || 1})</p>
-        </div>
-        <div class="card-footer">
-          <div class="price-container">
-            ${oldPriceHtml}
-            <span class="current-price">${product.price ? product.price.toFixed(2) : 'N/A'} €</span>
+
+        <div>
+          <div class="price-box">
+            <span class="current-price">${p.price.toFixed(2)} €</span>
+            <span class="old-price">${p.original_price.toFixed(2)} €</span>
+          </div>
+
+          <div class="card-footer">
+            <span>Voimassa: ${p.valid_until}</span>
+            <button class="fav-toggle" onclick="toggleFav(${p.id})">
+              ${isFav ? '❤️' : '🤍'}
+            </button>
           </div>
         </div>
       </div>
@@ -114,34 +209,98 @@ function renderProducts() {
   }).join('');
 }
 
-// Настройка обработчиков событий (поиск, фильтр)
-function setupEventListeners() {
-  // Живой поиск с задержкой (Debounce)
-  if (searchInput) {
-    let debounceTimer;
-    searchInput.addEventListener('input', (e) => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        state.searchQuery = e.target.value.trim();
-        fetchProducts();
-      }, 300);
-    });
+// Избранное
+window.toggleFav = function(id) {
+  if (state.favorites.has(id)) {
+    state.favorites.delete(id);
+  } else {
+    state.favorites.add(id);
   }
+  favCount.textContent = state.favorites.size;
+  applyFilters();
+};
 
-  // Фильтр по категориям
-  if (categoryFilter) {
-    categoryFilter.addEventListener('change', (e) => {
-      state.selectedCategory = e.target.value;
-      fetchProducts();
+// Слушатели событий
+function setupEventListeners() {
+  // Живой поиск
+  searchInput.addEventListener('input', (e) => {
+    state.searchQuery = e.target.value.trim();
+    applyFilters();
+  });
+
+  // Быстрые категории
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      state.selectedCategory = e.target.dataset.cat;
+      applyFilters();
     });
-  }
+  });
+
+  // Чекбоксы магазинов
+  document.querySelectorAll('.filter-store').forEach(cb => {
+    cb.addEventListener('change', () => {
+      state.selectedStores = Array.from(document.querySelectorAll('.filter-store:checked')).map(c => c.value);
+      applyFilters();
+    });
+  });
+
+  // Фильтры акций
+  document.getElementById('filterClub').addEventListener('change', (e) => {
+    state.clubOnly = e.target.checked;
+    applyFilters();
+  });
+
+  document.getElementById('filterHighDiscount').addEventListener('change', (e) => {
+    state.highDiscountOnly = e.target.checked;
+    applyFilters();
+  });
+
+  // Сортировка
+  sortSelect.addEventListener('change', (e) => {
+    state.sortBy = e.target.value;
+    applyFilters();
+  });
+
+  // Сброс поиска
+  document.getElementById('resetSearchBtn').addEventListener('click', () => {
+    searchInput.value = '';
+    state.searchQuery = '';
+    applyFilters();
+  });
+
+  document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+    document.querySelectorAll('.filter-store').forEach(c => c.checked = true);
+    document.getElementById('filterClub').checked = false;
+    document.getElementById('filterHighDiscount').checked = false;
+    state.selectedStores = ['lidl', 'k-market', 's-market'];
+    state.clubOnly = false;
+    state.highDiscountOnly = false;
+    applyFilters();
+  });
+
+  // Мобильный фильтр
+  document.getElementById('toggleMobileFilters').addEventListener('click', () => {
+    document.getElementById('filtersSidebar').classList.toggle('open');
+  });
+
+  // Модальное окно авторизации
+  const modal = document.getElementById('authModal');
+  document.getElementById('openAuthModal').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('closeAuthModal').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+      document.getElementById(e.target.dataset.target).classList.add('active');
+    });
+  });
 }
 
-// Вспомогательная функция для защиты от XSS
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-};
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
