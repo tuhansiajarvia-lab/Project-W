@@ -32,23 +32,19 @@ db.exec(`
         page INTEGER,
         product_name TEXT,
         price REAL,
-        original_price REAL,
-        discount_percent REAL,
-        offer_type TEXT,
-        raw_text TEXT,
+        unit TEXT,
+        discount TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(product_name, price)
+        UNIQUE(name, price)
     )
 `);
 
-// Подготавливаем SQL-запрос для вставки с защитой от дубликатов (INSERT OR IGNORE)
+
+
+// Подготавливаем SQL-запрос для быстрой вставки (Prepared Statement)
 const insertStmt = db.prepare(`
-    INSERT OR IGNORE INTO products (
-        store, catalog_folder, page, product_name, price, original_price, discount_percent, offer_type, raw_text
-    ) 
-    VALUES (
-        @store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @offer_type, @raw_text
-    )
+    INSERT OR REPLACE INTO products (name, price, unit, discount) 
+    VALUES (@name, @price, @unit, @discount)
 `);
 
 // Подключаемся к локальной Ollama
