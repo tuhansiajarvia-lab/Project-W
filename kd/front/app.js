@@ -89,7 +89,6 @@ const DEMO_PRODUCTS = [
 // Состояние UI
 const state = {
   products: DEMO_PRODUCTS,
-  favorites: new Set(),
   searchQuery: '',
   selectedCategory: 'all',
   selectedStores: ['lidl', 'k-market', 's-market'],
@@ -101,11 +100,9 @@ const state = {
 // DOM Элементы
 const productGrid = document.getElementById('productGrid');
 const searchInput = document.getElementById('searchInput');
-const searchBtn = document.getElementById('searchBtn');
 const resultsCount = document.getElementById('resultsCount');
 const emptyState = document.getElementById('emptyState');
 const sortSelect = document.getElementById('sortSelect');
-const favCount = document.getElementById('favCount');
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -115,7 +112,7 @@ function initApp() {
   renderSkeletons();
   setTimeout(() => {
     applyFilters();
-  }, 400); // Симуляция лёгкой загрузки
+  }, 400);
 
   setupEventListeners();
 }
@@ -135,22 +132,16 @@ function renderSkeletons() {
 // Фильтрация и сортировка
 function applyFilters() {
   let filtered = state.products.filter(p => {
-    // Поиск
     const matchesSearch = p.name.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
                           p.brand.toLowerCase().includes(state.searchQuery.toLowerCase());
-    // Категория
     const matchesCat = state.selectedCategory === 'all' || p.category === state.selectedCategory;
-    // Магазины
     const matchesStore = state.selectedStores.includes(p.store);
-    // Клубные скидки
     const matchesClub = !state.clubOnly || p.is_club;
-    // Высокие скидки
     const matchesHighDiscount = !state.highDiscountOnly || p.discount_percent >= 30;
 
     return matchesSearch && matchesCat && matchesStore && matchesClub && matchesHighDiscount;
   });
 
-  // Сортировка
   filtered.sort((a, b) => {
     if (state.sortBy === 'discount') return b.discount_percent - a.discount_percent;
     if (state.sortBy === 'price-asc') return a.price - b.price;
@@ -174,7 +165,6 @@ function renderProducts(items) {
 
   emptyState.classList.add('hidden');
   productGrid.innerHTML = items.map(p => {
-    const isFav = state.favorites.has(p.id);
     return `
       <div class="product-card">
         <div>
@@ -197,11 +187,8 @@ function renderProducts(items) {
             <span class="old-price">${p.original_price.toFixed(2)} €</span>
           </div>
 
-          <div class="card-footer">
+          <div class="card-footer" style="justify-content: flex-start;">
             <span>Voimassa: ${p.valid_until}</span>
-            <button class="fav-toggle" onclick="toggleFav(${p.id})">
-              ${isFav ? '❤️' : '🤍'}
-            </button>
           </div>
         </div>
       </div>
@@ -209,26 +196,13 @@ function renderProducts(items) {
   }).join('');
 }
 
-// Избранное
-window.toggleFav = function(id) {
-  if (state.favorites.has(id)) {
-    state.favorites.delete(id);
-  } else {
-    state.favorites.add(id);
-  }
-  favCount.textContent = state.favorites.size;
-  applyFilters();
-};
-
 // Слушатели событий
 function setupEventListeners() {
-  // Живой поиск
   searchInput.addEventListener('input', (e) => {
     state.searchQuery = e.target.value.trim();
     applyFilters();
   });
 
-  // Быстрые категории
   document.querySelectorAll('.chip').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -238,7 +212,6 @@ function setupEventListeners() {
     });
   });
 
-  // Чекбоксы магазинов
   document.querySelectorAll('.filter-store').forEach(cb => {
     cb.addEventListener('change', () => {
       state.selectedStores = Array.from(document.querySelectorAll('.filter-store:checked')).map(c => c.value);
@@ -246,7 +219,6 @@ function setupEventListeners() {
     });
   });
 
-  // Фильтры акций
   document.getElementById('filterClub').addEventListener('change', (e) => {
     state.clubOnly = e.target.checked;
     applyFilters();
@@ -257,13 +229,11 @@ function setupEventListeners() {
     applyFilters();
   });
 
-  // Сортировка
   sortSelect.addEventListener('change', (e) => {
     state.sortBy = e.target.value;
     applyFilters();
   });
 
-  // Сброс поиска
   document.getElementById('resetSearchBtn').addEventListener('click', () => {
     searchInput.value = '';
     state.searchQuery = '';
@@ -280,12 +250,10 @@ function setupEventListeners() {
     applyFilters();
   });
 
-  // Мобильный фильтр
   document.getElementById('toggleMobileFilters').addEventListener('click', () => {
     document.getElementById('filtersSidebar').classList.toggle('open');
   });
 
-  // Модальное окно авторизации
   const modal = document.getElementById('authModal');
   document.getElementById('openAuthModal').addEventListener('click', () => modal.classList.add('open'));
   document.getElementById('closeAuthModal').addEventListener('click', () => modal.classList.remove('open'));

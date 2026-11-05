@@ -8,4 +8,3 @@
 1. node dloader.js - запуск загрузчика каталогов
 2. node newparser.js - запуск парсера на основе DeepSeek
 3. node server.js - поднятие сервера и проверка UI
-
