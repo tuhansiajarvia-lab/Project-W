@@ -5,30 +5,50 @@ import fs from 'fs';
 import OpenAI from 'openai';
 import Database from 'better-sqlite3';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Инициализация базы данных (в папке db в корне проекта)
-const db = new Database(path.join(__dirname, '../db/products.db'));
+// Жестко фиксируем абсолютный путь к папке db в корне проекта (kd/db)
+const dbDir = path.resolve(__dirname, '../db');
 
-// На время разработки удаляем старую таблицу, чтобы структура точно соответствовала
-db.exec(`DROP TABLE IF EXISTS products`);
+// Принудительно создаем папку, если её нет
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`📁 Создана папка для базы данных: ${dbDir}`);
+}
 
-// Создаем таблицу для продуктов, если её еще нет
+const dbPath = path.join(dbDir, 'products.db');
+console.log(`📂 Путь к файлу БД: ${dbPath}`);
+
+// Инициализация базы данных
+const db = new Database(dbPath);
+
+// Создаем таблицу под структуру, которую ожидает server.js
 db.exec(`
     CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
+        store TEXT,
+        catalog_folder TEXT,
+        page INTEGER,
+        product_name TEXT,
         price REAL,
-        unit TEXT,
-        discount TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        original_price REAL,
+        discount_percent REAL,
+        offer_type TEXT,
+        raw_text TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(product_name, price)
     )
 `);
 
-// Подготавливаем SQL-запрос для быстрой вставки (Prepared Statement)
+// Подготавливаем SQL-запрос для вставки с защитой от дубликатов (INSERT OR IGNORE)
 const insertStmt = db.prepare(`
-    INSERT INTO products (name, price, unit, discount) 
-    VALUES (@name, @price, @unit, @discount)
+    INSERT OR IGNORE INTO products (
+        store, catalog_folder, page, product_name, price, original_price, discount_percent, offer_type, raw_text
+    ) 
+    VALUES (
+        @store, @catalog_folder, @page, @product_name, @price, @original_price, @discount_percent, @offer_type, @raw_text
+    )
 `);
 
 // Подключаемся к локальной Ollama
@@ -63,10 +83,11 @@ async function parsePageAndSale(filePath) {
     const prompt = `
     Extract products from this supermarket catalog page into a JSON object with a key "products" containing an array of items.
     Each item must have:
-    - "name": string (product name in Finnish)
-    - "price": number (regular price)
-    - "unit": string (unit like kg, kpl, l, etc.)
-    - "discount": string or null (e.g. "-14%" or null)
+    - "product_name": string (product name in Finnish)
+    - "price": number (regular/current price)
+    - "original_price": number or null (old price before discount, if present)
+    - "discount_percent": number or null (discount percentage as a number, e.g. 14 for -14%, or null)
+    - "offer_type": string or null (e.g. "Tarjous", "Club", or null)
     `;
 
     const response = await deepseek.chat.completions.create({
@@ -104,10 +125,15 @@ async function parsePageAndSale(filePath) {
             const insertMany = db.transaction((items) => {
                 for (const item of items) {
                     insertStmt.run({
-                        name: item.name || 'Unknown',
+                        store: 'lidl',
+                        catalog_folder: path.basename(path.dirname(filePath)), // имя папки каталога
+                        page: 1, // номер страницы
+                        product_name: item.product_name || item.name || 'Unknown',
                         price: typeof item.price === 'number' ? item.price : 0,
-                        unit: item.unit || '',
-                        discount: item.discount || null
+                        original_price: item.original_price || null,
+                        discount_percent: item.discount_percent || null,
+                        offer_type: item.offer_type || null,
+                        raw_text: content
                     });
                 }
             });
