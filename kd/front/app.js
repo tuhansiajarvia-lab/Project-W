@@ -68,7 +68,7 @@ const DEMO_PRODUCTS = [
     category: "maito",
     valid_until: "Pe 6.11.",
     is_club: true,
-    image: "Näyttökuva 2026-11-05 182838.png" // Иконка сыра
+    image: "images/cheese.png"
   },
   {
     id: 6,
@@ -82,7 +82,7 @@ const DEMO_PRODUCTS = [
     category: "maito",
     valid_until: "Su 8.11.",
     is_club: false,
-    image: "Näyttökuva 2026-11-05 180656.png" // Иконка молока
+    image: "images/milk.png"
   }
 ];
 
@@ -189,6 +189,7 @@ function renderProducts(items) {
 
           <div class="card-footer">
             <span>Voimassa: ${p.valid_until}</span>
+            ${p.is_club ? '<span class="club-badge">club</span>' : ''}
           </div>
         </div>
       </div>

@@ -233,6 +233,28 @@
   100% { opacity: 0.6; }
 }
 
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Бейдж клубной карты */
+.club-badge {
+  background-color: #0f2942;
+  color: #ffcc00;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* Пустое состояние */
 .empty-state {
   text-align: center;
