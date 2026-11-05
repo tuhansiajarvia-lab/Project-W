@@ -1,0 +1,87 @@
+/* Поисковая секция */
+.hero-search-section {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+  padding: 32px 20px;
+}
+
+.search-container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.search-container h1 {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: 4px 6px 4px 16px;
+  background: white;
+  margin-bottom: 16px;
+}
+
+.search-icon {
+  font-size: 1.1rem;
+  margin-right: 8px;
+}
+
+.search-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  padding: 8px 0;
+}
+
+.btn-search {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: var(--border-radius);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quick-categories {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.chip {
+  background: #f1f5f9;
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.chip:hover, .chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}

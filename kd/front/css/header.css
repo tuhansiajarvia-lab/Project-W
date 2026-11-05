@@ -1,5 +1,6 @@
+/* Хедер */
 .header {
-  background-color: #0f2942; /* Глубокий синий скандинавский цвет */
+  background-color: var(--primary);
   color: #ffffff;
   border-bottom: none;
   box-shadow: 0 2px 8px rgba(15, 41, 66, 0.1);
@@ -17,6 +18,12 @@
   align-items: center;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .logo {
   font-size: 1.6rem;
   font-weight: 900;
@@ -25,7 +32,12 @@
   text-decoration: none;
 }
 
-/* Переключатель языков в шапке */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .lang-picker {
   display: flex;
   gap: 2px;
@@ -49,13 +61,12 @@
 
 .lang-btn.active {
   background: #ffffff;
-  color: #0f2942;
+  color: var(--primary);
 }
 
-/* Кнопка входа */
 .btn-login {
-  background: #ffcc00; /* Фирменный желтый акцент */
-  color: #0f2942;
+  background: var(--accent-yellow);
+  color: var(--primary);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -67,4 +78,27 @@
 
 .btn-login:hover {
   opacity: 0.9;
+}
+
+/* Футер */
+.footer {
+  background: var(--primary);
+  color: #94a3b8;
+  margin-top: 60px;
+  padding: 40px 20px;
+  font-size: 0.9rem;
+  border-top: 4px solid var(--accent-yellow);
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-col strong {
+  color: #ffffff;
+  font-size: 1.1rem;
 }
