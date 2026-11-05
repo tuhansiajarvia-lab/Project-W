@@ -1,0 +1,22 @@
+/* Футер */
+.footer {
+  background: var(--primary);
+  color: #94a3b8;
+  margin-top: 60px;
+  padding: 40px 20px;
+  font-size: 0.9rem;
+  border-top: 4px solid var(--accent-2);
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-col strong {
+  color: #ffffff;
+  font-size: 1.1rem;
+}
