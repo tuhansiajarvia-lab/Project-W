@@ -1,3 +1,4 @@
+// Демонстрационные данные товаров с точными финскими названиями и вашими иконками
 const DEMO_PRODUCTS = [
   {
     id: 1,
@@ -11,7 +12,7 @@ const DEMO_PRODUCTS = [
     category: "kasvikset",
     valid_until: "Su 8.11.",
     is_club: false,
-    image: "Näyttökuva 2026-11-05 180956.png" // Ссылка на вашу иконку яблока
+    image: "images/apple.png"
   },
   {
     id: 2,
@@ -25,7 +26,7 @@ const DEMO_PRODUCTS = [
     category: "juomat",
     valid_until: "To 5.11.",
     is_club: true,
-    image: "Näyttökuva 2026-11-05 180607.png" // Иконка кофе
+    image: "images/coffee.png"
   },
   {
     id: 3,
@@ -39,7 +40,7 @@ const DEMO_PRODUCTS = [
     category: "liha",
     valid_until: "La 7.11.",
     is_club: false,
-    image: "Näyttökuva 2026-11-05 180636.png" // Иконка лосося
+    image: "images/fish.png"
   },
   {
     id: 4,
@@ -53,7 +54,7 @@ const DEMO_PRODUCTS = [
     category: "liha",
     valid_until: "Su 8.11.",
     is_club: false,
-    image: "Näyttökuva 2026-11-05 181409.png" // Иконка фарша
+    image: "images/ground_meat.png"
   },
   {
     id: 5,
