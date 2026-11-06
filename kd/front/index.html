@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- Хедер -->
+  <!-- Header -->
   <header class="header">
     <div class="header-container">
       <div class="header-left">
@@ -26,7 +26,7 @@
     </div>
   </header>
 
-  <!-- Компактная поисковая секция -->
+  <!-- Search section -->
   <section class="hero-search-section">
     <div class="search-container">
       <h1>Löydä halvimmat tarjoukset</h1>      
@@ -41,22 +41,22 @@
         <button class="btn-search" id="searchBtn">Etsi</button>
       </div>
 
-      <!-- Быстрые категории -->
+      <!-- Quick categories -->
       <div class="quick-categories">
         <span class="quick-label">Suositut:</span>
         <button class="chip active" data-cat="all">Kaikki</button>
-        <button class="chip" data-cat="liha">🥩 Liha & Kala</button>
-        <button class="chip" data-cat="maito">🥛 Maitotuotteet</button>
-        <button class="chip" data-cat="kasvikset">🥬 Kasvikset</button>
-        <button class="chip" data-cat="juomat">☕ Juomat</button>
+        <button class="chip" data-cat="liha">Liha & Kala</button>
+        <button class="chip" data-cat="maito">Maitotuotteet</button>
+        <button class="chip" data-cat="kasvikset">Kasvikset</button>
+        <button class="chip" data-cat="juomat">Juomat</button>
       </div>
     </div>
   </section>
 
-  <!-- Каталог товаров с фильтрами -->
+  <!-- Tuoteluettelo ja suodattimet -->
   <main class="catalog-main">
     
-    <!-- Панель управления каталогом -->
+    <!-- Katalogin hallintapaneeli -->
     <div class="catalog-header">
       <div class="results-info">
         <h2 id="catalogTitle">Ajankohtaiset tarjoukset</h2>
@@ -65,7 +65,8 @@
 
       <div class="catalog-controls">
         <button class="btn-filter-toggle" id="toggleMobileFilters">
-          ⚙️ Suodattimet
+          
+        <!-- Suodattimet -->
         </button>
         <div class="sort-wrapper">
           <label for="sortSelect">Järjestä:</label>
@@ -80,7 +81,7 @@
     </div>
 
     <div class="catalog-layout">
-      <!-- Сайдбар фильтров -->
+      <!-- Filters sidebar -->
       <aside class="filters-sidebar" id="filtersSidebar">
         <div class="filter-group">
           <h3>Kaupat</h3>
@@ -105,13 +106,12 @@
         <button class="btn-reset-filters" id="resetFiltersBtn">Tyhjennä suodattimet</button>
       </aside>
 
-      <!-- Сетка товаров -->
+      <!-- Products grid -->
       <section class="products-grid-wrapper">
         <div class="products-grid" id="productGrid">
-          <!-- Карточки рендерятся через app.js -->
         </div>
 
-        <!-- Пустое состояние -->
+        <!-- Empty state -->
         <div class="empty-state hidden" id="emptyState">
           <div class="empty-icon">🔍</div>
           <h3>Tuotteita ei löytynyt</h3>
@@ -122,7 +122,7 @@
     </div>
   </main>
 
-  <!-- Футер -->
+  <!-- Footer -->
   <footer class="footer">
     <div class="footer-container">
       <div class="footer-col">
@@ -135,7 +135,7 @@
     </div>
   </footer>
 
-  <!-- Модальное окно авторизации -->
+  <!-- Auth window -->
   <div class="modal-overlay" id="authModal">
     <div class="modal-card">
       <button class="modal-close" id="closeAuthModal">&times;</button>

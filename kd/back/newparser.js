@@ -8,22 +8,21 @@ import Database from 'better-sqlite3';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Жестко фиксируем абсолютный путь к папке db в корне проекта (kd/db)
 const dbDir = path.resolve(__dirname, '../db');
 
-// Принудительно создаем папку, если её нет
+// Luodaan kansio, jos sitä ei ole olemassa
 if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
-    console.log(`📁 Создана папка для базы данных: ${dbDir}`);
+    console.log(`Tietokantakansio luotu: ${dbDir}`);
 }
 
 const dbPath = path.join(dbDir, 'products.db');
 console.log(`Путь к файлу БД: ${dbPath}`);
 
-// Инициализация базы данных
+// Tietokannan alustus
 const db = new Database(dbPath);
 
-// Создаем таблицу под структуру, которую ожидает server.js
+// Luodaan tietokantataulu rakenteelle, jota server.js odottaa
 db.exec(`
     CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,19 +40,19 @@ db.exec(`
 
 
 
-// Подготавливаем SQL-запрос для быстрой вставки (Prepared Statement)
+// Luodaan SQL-lisäyskysely
 const insertStmt = db.prepare(`
     INSERT OR REPLACE INTO products (name, price, unit, discount) 
     VALUES (@name, @price, @unit, @discount)
 `);
 
-// Подключаемся к локальной Ollama
+// Yhdistetään paikalliseen Ollamaan
 const deepseek = new OpenAI({
     baseURL: 'http://localhost:11434/v1',
     apiKey: 'ollama'
 });
 
-// Функция рекурсивного поиска PNG
+// Rekursiivinen funktio PNG-tiedostojen etsimiseen
 function getPngFiles(dirPath) {
     let results = [];
     if (!fs.existsSync(dirPath)) return results;
@@ -70,9 +69,9 @@ function getPngFiles(dirPath) {
     return results;
 }
 
-// Функция парсинга страницы и сохранения в SQLite
+// Sivun jäsennys- ja tallennusfunktio SQLiteen
 async function parsePageAndSale(filePath) {
-    console.log(`Чтение файла картинки: ${filePath}`);
+    console.log(`Kuvatiedoston lukeminen: ${filePath}`);
     const imageBuffer = fs.readFileSync(filePath);
     const base64Image = imageBuffer.toString('base64');
 
@@ -110,19 +109,19 @@ async function parsePageAndSale(filePath) {
     });
 
     const content = response.choices[0].message.content;
-    console.log("Ответ от модели:\n", content);
+    console.log("Vastaus mallilta: \n", content);
 
     try {
         const parsedData = JSON.parse(content);
         const products = parsedData.products || [];
 
         if (products.length > 0) {
-            // Используем транзакцию для быстрой и безопасной записи пачки товаров
+            // Käytetään transaktiota tuoteerän nopeaan ja turvalliseen tallennukseen
             const insertMany = db.transaction((items) => {
                 for (const item of items) {
                     insertStmt.run({
                         store: 'lidl',
-                        catalog_folder: path.basename(path.dirname(filePath)), // имя папки каталога
+                        catalog_folder: path.basename(path.dirname(filePath)), // catalogin kansion nimi
                         page: 1, // номер страницы
                         product_name: item.product_name || item.name || 'Unknown',
                         price: typeof item.price === 'number' ? item.price : 0,
@@ -135,33 +134,33 @@ async function parsePageAndSale(filePath) {
             });
 
             insertMany(products);
-            console.log(`Успешно сохранено товаров в БД: ${products.length}`);
+            console.log(`Tuotteet tallennettu onnistuneesti tietokantaan: ${products.length}`);
         } else {
-            console.log("На странице не найдено товаров для сохранения.");
+            console.log("Sivulta ei löytynyt tallennettavia tuotteita.");
         }
     } catch (e) {
-        console.error("Ошибка при парсинге JSON или записи в БД:", e.message);
+        console.error("Virhe JSON-jäsennyksessä tai tietokantatallennuksessa:", e.message);
     }
 }
 
-// Главная функция обхода каталогов
+// Pääfunktio tuoteluetteloiden läpikäyntiin
 async function processAllPages(dir) {
     const files = getPngFiles(dir);
-    console.log(`Найдено страниц для обработки: ${files.length}`);
+    console.log(`Sivuja löydetty käsiteltäväksi: ${files.length}`);
     
     if (files.length === 0) {
-        console.log("Не найдено ни одной картинки для парсинга.");
+        console.log("Yhtään kuvaa ei löytynyt jäsennettäväksi.");
         return;
     }
 
     for (let i = 0; i < files.length; i++) {
         const filePath = files[i];
-        console.log(`\n--- Обработка файла [${i + 1}/${files.length}]: ${filePath} ---`);
+        console.log(`\n--- Tiedoston käsittely [${i + 1}/${files.length}]: ${filePath} ---`);
         
         try {
             await parsePageAndSale(filePath);
         } catch (error) {
-            console.error(`Ошибка при обработке файла ${filePath}:`, error.message);
+            console.error(`Virhe tiedoston käsittelyssä ${filePath}:`, error.message);
         }
 
         if (i < files.length - 1) {
@@ -169,8 +168,8 @@ async function processAllPages(dir) {
         }
     }
     
-    console.log('Парсинг всего каталога и сохранение в БД успешно завершены!');
+    console.log('Koko katalogin parsinta ja tallennus tietokantaan suoritettu onnistuneesti!');
 }
 
-// Запуск обхода каталогов Lidl
+// Aloitetaan Lidl-tuoteluetteloiden läpikäynti
 processAllPages('../catalogs/lidl');

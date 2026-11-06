@@ -6,19 +6,19 @@ import Database from 'better-sqlite3';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Включаем CORS
+// Otetaan CORS käyttöön
 app.use(cors());
 app.use(express.json());
 
-// Раздаём статику из папки front/ (поднимаемся на уровень выше из back/, если файл в back/)
+// Tarjotaan staattiset tiedostot front-kansiosta
 const frontPath = path.resolve(process.cwd(), '..', 'front');
 app.use(express.static(frontPath));
 
-// Указываем путь к БД в папке db/
+// Tietokannan polku db-kansiossa
 const dbPath = path.resolve(process.cwd(), '..', 'db', 'products.db');
 const db = new Database(dbPath, { readonly: true });
 
-// API: Получить список категорий (каталогов)
+// API: Hae kategorioiden lista
 app.get('/api/categories', (req, res) => {
   try {
     const query = `
@@ -35,7 +35,7 @@ app.get('/api/categories', (req, res) => {
   }
 });
 
-// API: Получить список товаров с поиском и фильтрацией
+// API: Hae tuotelistaus hakuehdoilla ja suodatuksella
 app.get('/api/products', (req, res) => {
   const { search = '', category = '' } = req.query;
 
@@ -58,14 +58,14 @@ app.get('/api/products', (req, res) => {
     `;
     const params = [];  
 
-    // Поиск по названию или сырому тексту
+    // Haku nimen tai raakatekstin mukaan
     if (search) {
       query += ` AND (product_name LIKE ? OR raw_text LIKE ?)`;
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam);
     }
 
-    // Фильтрация по папке каталога (категории/магазину)
+    // Suodatus katalogikansion (kategorian/kaupan) mukaan
     if (category && category !== 'all') {
       query += ` AND catalog_folder = ?`;
       params.push(category);
@@ -90,5 +90,5 @@ app.get('/api/products', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Сервер запущен: http://localhost:${PORT}`);
+  console.log(`Palvelin käynnissä: http://localhost:${PORT}`);
 });
