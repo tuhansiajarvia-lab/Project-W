@@ -18,7 +18,7 @@ if (!fs.existsSync(dbDir)) {
 }
 
 const dbPath = path.join(dbDir, 'products.db');
-console.log(`📂 Путь к файлу БД: ${dbPath}`);
+console.log(`Путь к файлу БД: ${dbPath}`);
 
 // Инициализация базы данных
 const db = new Database(dbPath);

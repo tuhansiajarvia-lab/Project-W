@@ -18,24 +18,24 @@ async function downloadCatalogs() {
   });
   const page = await context.newPage();
 
-  console.log('Открываем страницу лидл каталогов...');
+  console.log('Avataan Lidlin kuvastot -sivu...');
   await page.goto('https://www.lidl.fi/tarjouslehdet', { waitUntil: 'domcontentloaded' });
 
-  // 1. Закрываем куки
+// Suljetaan evästeet
   try {
     const cookieBtn = await page.waitForSelector('#onetrust-accept-btn-handler', { timeout: 3000 });
     if (cookieBtn) {
       await cookieBtn.click();
-      console.log('Баннер куки закрыт.');
+      console.log('Evästebanneri suljettu.');
     }
   } catch (e) {}
 
-  // 2. Закрываем окно выбора магазина (Valitse Lidl-myymälä)
+// Suljetaan myymälän valintaikkuna
   try {
     const closeBtn = await page.waitForSelector('button[aria-label*="Sulje"], button.flyout__close, .dialog__close', { timeout: 3000 });
     if (closeBtn) {
       await closeBtn.click();
-      console.log('Окно выбора магазина закрыто.');
+      console.log('Myymälän valintaikkuna suljettu.');
     } else {
       await page.keyboard.press('Escape');
     }
@@ -45,13 +45,13 @@ async function downloadCatalogs() {
 
   await page.waitForTimeout(1000);
 
-  // 3. Ищем карточки каталогов
+  // Etsitään kuvastot sivulta
   const catalogSelector = 'article, .flyer-item, a[href*="leaflets"], a[href*="tarjousleht"]';
   await page.waitForSelector(catalogSelector, { timeout: 10000 }).catch(() => {
     console.log('Элементы каталогов не найдены по селектору.');
   });
 
-  // Собираем ссылки из всех найденных блоков
+ // Kerätään linkit kaikista löydetyistä lohkoista
   const catalogLinks = await page.$$eval('a', links =>
     Array.from(new Set(
       links
@@ -60,15 +60,15 @@ async function downloadCatalogs() {
     ))
   );
 
-  console.log(`Найдено ссылок на каталоги: ${catalogLinks.length}`);
+  console.log(`Kuvastolinkkejä löydetty: ${catalogLinks.length}`);
 
   if (catalogLinks.length === 0) {
-    console.log('Пробуем кликнуть по первой карточке каталога напрямую...');
+    console.log('Yritetään klikata ensimmäistä kuvastokorttia suoraan...');
     const cards = await page.$$(catalogSelector);
     if (cards.length > 0) {
       await cards[0].click();
       await page.waitForTimeout(3000);
-      console.log('Перешли в каталог:', page.url());
+      console.log('Siirryttiin kuvastoon:', page.url());
       catalogLinks.push(page.url());
     }
   }
@@ -76,14 +76,14 @@ async function downloadCatalogs() {
   for (let i = 0; i < catalogLinks.length; i++) {
     const link = catalogLinks[i];
     
-    // Путь теперь жестко зафиксирован относительно корня проекта scraper/
+    // Polku on nyt kiinteästi määritetty suhteessa scraper-projektin juureen
     const folderName = path.join(BASE_CATALOGS_DIR, `catalog_${i + 1}`);
 
     if (!fs.existsSync(folderName)) {
       fs.mkdirSync(folderName, { recursive: true });
     }
 
-    console.log(`\nОткрываем каталог ${i + 1}: ${link}`);
+    console.log(`\nAvataan kuvasto ${i + 1}: ${link}`);
     const catalogPage = await context.newPage();
     await catalogPage.goto(link, { waitUntil: 'domcontentloaded' });
     await catalogPage.waitForTimeout(3000);
@@ -91,7 +91,7 @@ async function downloadCatalogs() {
     for (let pageNum = 1; pageNum <= 10; pageNum++) {
       const imgPath = path.join(folderName, `page_${pageNum}.png`);
       await catalogPage.screenshot({ path: imgPath });
-      console.log(`  Сохранена страница ${pageNum} -> ${imgPath}`);
+      console.log(`  Sivu tallennettu ${pageNum} -> ${imgPath}`);
 
       const nextButton = await catalogPage.$('button[aria-label*="Seuraava"], button[aria-label*="Next"], .nav-next');
       if (nextButton) {
@@ -106,7 +106,7 @@ async function downloadCatalogs() {
   }
 
   await browser.close();
-  console.log('\nСкачивание завершено!');
+  console.log('\nLataus valmis!');
 }
 
 downloadCatalogs().catch(console.error);
